@@ -1,14 +1,14 @@
 import Foundation
 import SwiftUI
 import PDFKit
+import UIKit
 
 class ExportEngine {
-    private struct ReportRow {
-        let day: String
-        let timings: String
-        let hours: String
-        let payout: String
-        let notes: String
+    private struct ExportColumnLayout {
+        let column: ExportColumn
+        let title: String
+        let textAlignment: NSTextAlignment
+        let width: CGFloat
     }
 
     static func export(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel, completion: @escaping (URL?) -> Void) {
@@ -30,45 +30,43 @@ class ExportEngine {
         }
     }
 
-    static func clipboardText(entries: [WorkDay], settings: SettingsViewModel, includeMonthlyTotal: Bool) -> String {
-        renderPlainText(entries: entries, settings: settings, includeMonthlyTotal: includeMonthlyTotal)
+    static func copyReportToPasteboard(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) {
+        if let image = renderClipboardImage(entries: entries, profile: profile, settings: settings) {
+            UIPasteboard.general.image = image
+        }
     }
 
     private static func generateTXT(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> URL? {
-        let txtContent = renderPlainText(
-            entries: entries,
-            settings: settings,
-            includeMonthlyTotal: profile.includeMonthlyTotal
-        )
+        let txtContent = renderPlainText(entries: entries, profile: profile, settings: settings)
         return saveToTemp(fileName: "WorkReport.txt", content: txtContent.data(using: .utf8))
     }
 
     private static func generateCSV(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> URL? {
         var lines: [String] = []
-        lines.append(profile.selectedColumns.map { $0.rawValue.capitalized }.joined(separator: ","))
+        lines.append(profile.selectedColumns.map(columnTitle(for:)).joined(separator: ","))
 
         for entry in entries {
-            var row: [String] = []
-            for column in profile.selectedColumns {
-                switch column {
-                case .day:
-                    row.append(DateFormatterHelper.dayFull.string(from: entry.date))
-                case .timings:
-                    row.append("\(DateFormatterHelper.time.string(from: entry.fromTime))-\(DateFormatterHelper.time.string(from: entry.toTime))")
-                case .hours:
-                    row.append(entry.totalHoursString)
-                case .payout:
-                    row.append(String(format: "%.2f", entry.totalPayout))
-                case .notes:
-                    row.append("\"\(entry.notes)\"")
-                }
-            }
+            let row = profile.selectedColumns.map { csvValue(for: $0, entry: entry, settings: settings) }
             lines.append(row.joined(separator: ","))
         }
 
         if profile.includeMonthlyTotal {
             let totals = monthlyTotals(entries: entries, settings: settings)
-            lines.append("Monthly Total,,\(totals.hours),\(totals.payoutValue),")
+            let totalRow = profile.selectedColumns.map { column in
+                switch column {
+                case .day:
+                    return "Monthly Total"
+                case .timings:
+                    return ""
+                case .hours:
+                    return totals.hours
+                case .payout:
+                    return totals.payoutValue
+                case .notes:
+                    return ""
+                }
+            }
+            lines.append(totalRow.joined(separator: ","))
         }
 
         let csvContent = lines.joined(separator: "\n")
@@ -76,93 +74,228 @@ class ExportEngine {
     }
 
     private static func generatePDF(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> URL? {
-        let rows = reportRows(entries: entries, settings: settings)
-        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 595, height: 842))
+        let layouts = columnLayouts(for: entries, profile: profile, settings: settings, baseFont: UIFont.systemFont(ofSize: 12), boldFont: UIFont.boldSystemFont(ofSize: 12))
+        let totalWidth = layouts.reduce(CGFloat(40)) { $0 + $1.width }
+        let pageWidth = max(595, totalWidth + 20)
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: pageWidth, height: 842))
 
         let data = renderer.pdfData { context in
             context.beginPage()
 
             var yPosition: CGFloat = 24
             let lineHeight: CGFloat = 20
-            let leftAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 12)
-            ]
-            let leftBoldAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.boldSystemFont(ofSize: 12)
-            ]
+            let leftAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 12)]
+            let leftBoldAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 12)]
             let rightAttributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont.systemFont(ofSize: 12),
-                .paragraphStyle: rightAlignedParagraphStyle()
+                .paragraphStyle: paragraphStyle(alignment: .right)
             ]
             let rightBoldAttributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont.boldSystemFont(ofSize: 12),
-                .paragraphStyle: rightAlignedParagraphStyle()
+                .paragraphStyle: paragraphStyle(alignment: .right)
             ]
 
-            drawPDFText("Day", atX: 20, y: yPosition, width: 110, attributes: leftBoldAttributes)
-            drawPDFText("Timings", atX: 140, y: yPosition, width: 120, attributes: leftBoldAttributes)
-            drawPDFText("Hours", atX: 270, y: yPosition, width: 60, attributes: rightBoldAttributes)
-            drawPDFText("Payout", atX: 340, y: yPosition, width: 80, attributes: rightBoldAttributes)
-            drawPDFText("Notes", atX: 430, y: yPosition, width: 145, attributes: leftBoldAttributes)
+            var xPosition: CGFloat = 20
+            for layout in layouts {
+                drawPDFText(
+                    layout.title,
+                    atX: xPosition,
+                    y: yPosition,
+                    width: layout.width,
+                    attributes: layout.textAlignment == .right ? rightBoldAttributes : leftBoldAttributes
+                )
+                xPosition += layout.width
+            }
             yPosition += lineHeight
 
-            for row in rows {
-                drawPDFText(row.day, atX: 20, y: yPosition, width: 110, attributes: leftAttributes)
-                drawPDFText(row.timings, atX: 140, y: yPosition, width: 120, attributes: leftAttributes)
-                drawPDFText(row.hours, atX: 270, y: yPosition, width: 60, attributes: rightAttributes)
-                drawPDFText(row.payout, atX: 340, y: yPosition, width: 80, attributes: rightAttributes)
-                drawPDFText(row.notes, atX: 430, y: yPosition, width: 145, attributes: leftAttributes)
+            for entry in entries {
+                xPosition = 20
+                for layout in layouts {
+                    drawPDFText(
+                        displayValue(for: layout.column, entry: entry, settings: settings),
+                        atX: xPosition,
+                        y: yPosition,
+                        width: layout.width,
+                        attributes: layout.textAlignment == .right ? rightAttributes : leftAttributes
+                    )
+                    xPosition += layout.width
+                }
                 yPosition += lineHeight
             }
 
             if profile.includeMonthlyTotal {
                 let totals = monthlyTotals(entries: entries, settings: settings)
+                xPosition = 20
                 yPosition += 4
-                drawPDFText("Monthly Total", atX: 20, y: yPosition, width: 110, attributes: leftBoldAttributes)
-                drawPDFText(totals.hours, atX: 270, y: yPosition, width: 60, attributes: rightBoldAttributes)
-                drawPDFText(totals.payoutDisplay, atX: 340, y: yPosition, width: 80, attributes: rightBoldAttributes)
+                for layout in layouts {
+                    let totalValue = totalValue(for: layout.column, totals: totals)
+                    drawPDFText(
+                        totalValue,
+                        atX: xPosition,
+                        y: yPosition,
+                        width: layout.width,
+                        attributes: layout.textAlignment == .right ? rightBoldAttributes : leftBoldAttributes
+                    )
+                    xPosition += layout.width
+                }
             }
         }
 
         return saveToTemp(fileName: "WorkReport.pdf", content: data)
     }
 
-    private static func renderPlainText(entries: [WorkDay], settings: SettingsViewModel, includeMonthlyTotal: Bool) -> String {
-        let rows = reportRows(entries: entries, settings: settings)
-        let header = formattedRow(day: "Day", timings: "Timings", hours: "Hours", payout: "Payout", notes: "Notes")
-        let divider = String(repeating: "-", count: 90)
+    private static func renderPlainText(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> String {
+        let widths = textColumnWidths(for: entries, profile: profile, settings: settings)
+        let header = profile.selectedColumns
+            .map { padded(columnTitle(for: $0), width: widths[$0] ?? columnTitle(for: $0).count, alignment: textAlignment(for: $0)) }
+            .joined(separator: "   ")
+        let divider = String(repeating: "-", count: max(20, header.count))
 
         var lines = [header, divider]
-        lines.append(contentsOf: rows.map {
-            formattedRow(day: $0.day, timings: $0.timings, hours: $0.hours, payout: $0.payout, notes: $0.notes)
+        lines.append(contentsOf: entries.map { entry in
+            profile.selectedColumns
+                .map { padded(displayValue(for: $0, entry: entry, settings: settings), width: widths[$0] ?? 0, alignment: textAlignment(for: $0)) }
+                .joined(separator: "   ")
         })
 
-        if includeMonthlyTotal {
+        if profile.includeMonthlyTotal {
             let totals = monthlyTotals(entries: entries, settings: settings)
+            let totalLine = profile.selectedColumns
+                .map { padded(totalValue(for: $0, totals: totals), width: widths[$0] ?? 0, alignment: textAlignment(for: $0)) }
+                .joined(separator: "   ")
             lines.append(divider)
-            lines.append(
-                formattedRow(
-                    day: "Monthly Total",
-                    timings: "",
-                    hours: totals.hours,
-                    payout: totals.payoutDisplay,
-                    notes: ""
-                )
-            )
+            lines.append(totalLine)
         }
 
         return lines.joined(separator: "\n")
     }
 
-    private static func reportRows(entries: [WorkDay], settings: SettingsViewModel) -> [ReportRow] {
-        entries.map { entry in
-            ReportRow(
-                day: DateFormatterHelper.dayFull.string(from: entry.date),
-                timings: "\(DateFormatterHelper.time.string(from: entry.fromTime))-\(DateFormatterHelper.time.string(from: entry.toTime))",
-                hours: entry.totalHoursString,
-                payout: "\(settings.currencyCode) \(String(format: "%.2f", entry.totalPayout))",
-                notes: entry.notes
-            )
+    private static func renderClipboardImage(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> UIImage? {
+        let font = UIFont.systemFont(ofSize: 14)
+        let boldFont = UIFont.boldSystemFont(ofSize: 14)
+        let layouts = columnLayouts(for: entries, profile: profile, settings: settings, baseFont: font, boldFont: boldFont)
+        let rowHeight: CGFloat = 28
+        let horizontalPadding: CGFloat = 16
+        let verticalPadding: CGFloat = 20
+        let dividerHeight: CGFloat = 1
+
+        let totalWidth = layouts.reduce(horizontalPadding * 2) { $0 + $1.width }
+        let totalRows = CGFloat(entries.count + 1 + (profile.includeMonthlyTotal ? 1 : 0))
+        let totalDividers = CGFloat(entries.count + 1)
+        let totalHeight = verticalPadding * 2 + totalRows * rowHeight + totalDividers * dividerHeight
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: totalWidth, height: totalHeight))
+        return renderer.image { context in
+            let cgContext = context.cgContext
+            UIColor.systemBackground.setFill()
+            cgContext.fill(CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
+
+            var y = verticalPadding
+            var x = horizontalPadding
+            for layout in layouts {
+                drawImageText(layout.title, x: x, y: y, width: layout.width, font: boldFont, alignment: layout.textAlignment)
+                x += layout.width
+            }
+
+            y += rowHeight
+            drawDivider(in: cgContext, y: y, width: totalWidth, horizontalPadding: horizontalPadding)
+            y += dividerHeight
+
+            for entry in entries {
+                x = horizontalPadding
+                for layout in layouts {
+                    drawImageText(displayValue(for: layout.column, entry: entry, settings: settings), x: x, y: y, width: layout.width, font: font, alignment: layout.textAlignment)
+                    x += layout.width
+                }
+                y += rowHeight
+                drawDivider(in: cgContext, y: y, width: totalWidth, horizontalPadding: horizontalPadding)
+                y += dividerHeight
+            }
+
+            if profile.includeMonthlyTotal {
+                let totals = monthlyTotals(entries: entries, settings: settings)
+                x = horizontalPadding
+                for layout in layouts {
+                    drawImageText(totalValue(for: layout.column, totals: totals), x: x, y: y, width: layout.width, font: boldFont, alignment: layout.textAlignment)
+                    x += layout.width
+                }
+            }
+        }
+    }
+
+    private static func textColumnWidths(for entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> [ExportColumn: Int] {
+        let totals = monthlyTotals(entries: entries, settings: settings)
+        return Dictionary(uniqueKeysWithValues: profile.selectedColumns.map { column in
+            let headerWidth = columnTitle(for: column).count
+            let rowWidth = entries.map { displayValue(for: column, entry: $0, settings: settings).count }.max() ?? 0
+            let totalWidth = totalValue(for: column, totals: totals).count
+            return (column, max(headerWidth, rowWidth, totalWidth))
+        })
+    }
+
+    private static func columnLayouts(for entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel, baseFont: UIFont, boldFont: UIFont) -> [ExportColumnLayout] {
+        let totals = monthlyTotals(entries: entries, settings: settings)
+        return profile.selectedColumns.map { column in
+            let title = columnTitle(for: column)
+            let alignment = textAlignment(for: column)
+            let width = max(
+                textWidth(title, font: boldFont),
+                entries.map { textWidth(displayValue(for: column, entry: $0, settings: settings), font: baseFont) }.max() ?? 0,
+                textWidth(totalValue(for: column, totals: totals), font: boldFont),
+                minimumWidth(for: column)
+            ) + 24
+            return ExportColumnLayout(column: column, title: title, textAlignment: alignment, width: width)
+        }
+    }
+
+    private static func columnTitle(for column: ExportColumn) -> String {
+        switch column {
+        case .day: return "Day"
+        case .timings: return "Timings"
+        case .hours: return "Hours"
+        case .payout: return "Payout"
+        case .notes: return "Notes"
+        }
+    }
+
+    private static func displayValue(for column: ExportColumn, entry: WorkDay, settings: SettingsViewModel) -> String {
+        switch column {
+        case .day:
+            return DateFormatterHelper.dayFull.string(from: entry.date)
+        case .timings:
+            return "\(DateFormatterHelper.time.string(from: entry.fromTime))-\(DateFormatterHelper.time.string(from: entry.toTime))"
+        case .hours:
+            return entry.totalHoursString
+        case .payout:
+            return "\(settings.currencyCode) \(String(format: "%.2f", entry.totalPayout))"
+        case .notes:
+            return entry.notes
+        }
+    }
+
+    private static func totalValue(for column: ExportColumn, totals: (hours: String, payoutDisplay: String, payoutValue: String)) -> String {
+        switch column {
+        case .day:
+            return "Monthly Total"
+        case .timings:
+            return ""
+        case .hours:
+            return totals.hours
+        case .payout:
+            return totals.payoutDisplay
+        case .notes:
+            return ""
+        }
+    }
+
+    private static func csvValue(for column: ExportColumn, entry: WorkDay, settings: SettingsViewModel) -> String {
+        switch column {
+        case .notes:
+            return "\"\(entry.notes)\""
+        case .payout:
+            return String(format: "%.2f", entry.totalPayout)
+        default:
+            return displayValue(for: column, entry: entry, settings: settings)
         }
     }
 
@@ -174,21 +307,29 @@ class ExportEngine {
         return (totalHours, "\(settings.currencyCode) \(payoutValue)", payoutValue)
     }
 
-    private static func formattedRow(day: String, timings: String, hours: String, payout: String, notes: String) -> String {
-        [
-            padded(day, width: 18, alignment: .left),
-            padded(timings, width: 15, alignment: .left),
-            padded(hours, width: 7, alignment: .right),
-            padded(payout, width: 10, alignment: .right),
-            notes
-        ].joined(separator: "  ")
+    private static func minimumWidth(for column: ExportColumn) -> CGFloat {
+        switch column {
+        case .day: return 90
+        case .timings: return 100
+        case .hours: return 60
+        case .payout: return 80
+        case .notes: return 100
+        }
+    }
+
+    private static func textAlignment(for column: ExportColumn) -> NSTextAlignment {
+        switch column {
+        case .hours, .payout:
+            return .right
+        default:
+            return .left
+        }
     }
 
     private static func padded(_ value: String, width: Int, alignment: NSTextAlignment) -> String {
         if value.count >= width {
             return value
         }
-
         let padding = String(repeating: " ", count: width - value.count)
         switch alignment {
         case .right:
@@ -203,9 +344,31 @@ class ExportEngine {
         text.draw(in: rect, withAttributes: attributes)
     }
 
-    private static func rightAlignedParagraphStyle() -> NSMutableParagraphStyle {
+    private static func drawImageText(_ text: String, x: CGFloat, y: CGFloat, width: CGFloat, font: UIFont, alignment: NSTextAlignment) {
+        let rect = CGRect(x: x, y: y + 5, width: width, height: 18)
+        text.draw(
+            in: rect,
+            withAttributes: [
+                .font: font,
+                .foregroundColor: UIColor.label,
+                .paragraphStyle: paragraphStyle(alignment: alignment)
+            ]
+        )
+    }
+
+    private static func drawDivider(in context: CGContext, y: CGFloat, width: CGFloat, horizontalPadding: CGFloat) {
+        context.setFillColor(UIColor.separator.cgColor)
+        context.fill(CGRect(x: horizontalPadding, y: y, width: width - (horizontalPadding * 2), height: 1))
+    }
+
+    private static func textWidth(_ text: String, font: UIFont) -> CGFloat {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        return ceil((text as NSString).size(withAttributes: attributes).width)
+    }
+
+    private static func paragraphStyle(alignment: NSTextAlignment) -> NSMutableParagraphStyle {
         let style = NSMutableParagraphStyle()
-        style.alignment = .right
+        style.alignment = alignment
         return style
     }
 
