@@ -1,25 +1,32 @@
 import SwiftUI
 
 struct ExportProfileEditView: View {
+    enum Mode {
+        case profile
+        case exportSettings
+    }
+
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var exportVM: ExportProfilesViewModel
-    @EnvironmentObject var calendarVM: CalendarViewModel
-    @EnvironmentObject var settings: SettingsViewModel
 
     @Binding var profile: ExportProfile?
+    let mode: Mode
 
     @State private var name: String = ""
     @State private var selectedColumns: [ExportColumn] = ExportColumn.allCases
     @State private var includeMonthlyTotal: Bool = true
-    @State private var formats: [ExportFormat] = [.pdf]
-    @State private var dateRange: ExportDateRange = .currentMonth
-    @State private var timeFormatOverride: TimeFormat? = nil
-    @State private var currencyOverride: String? = nil
+    @State private var dateRangeSelection: ExportRangeSelection = .currentMonth
+    @State private var customStartDate: Date = Date()
+    @State private var customEndDate: Date = Date()
+    @State private var timeFormatOverride: TimeFormat = .hour24
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Profile Name")) {
-                    TextField("Name", text: $name)
+                if mode == .profile {
+                    Section(header: Text("Profile Name")) {
+                        TextField("Name", text: $name)
+                    }
                 }
 
                 Section(header: Text("Columns")) {
@@ -28,15 +35,17 @@ struct ExportProfileEditView: View {
                     }
                 }
 
-                Section(header: Text("Formats")) {
-                    ForEach(ExportFormat.allCases, id: \.self) { format in
-                        Toggle(format.rawValue.uppercased(), isOn: formatBinding(for: format))
-                    }
-                }
-
                 Section(header: Text("Date Range")) {
-                    Picker("Date Range", selection: $dateRange) {
-                        Text("Current Month").tag(ExportDateRange.currentMonth)
+                    Picker("Date Range", selection: $dateRangeSelection) {
+                        Text("Current Month").tag(ExportRangeSelection.currentMonth)
+                        Text("Previous Month").tag(ExportRangeSelection.previousMonth)
+                        Text("Next Month").tag(ExportRangeSelection.nextMonth)
+                        Text("Custom").tag(ExportRangeSelection.custom)
+                    }
+
+                    if dateRangeSelection == .custom {
+                        DatePicker("From", selection: $customStartDate, displayedComponents: .date)
+                        DatePicker("To", selection: $customEndDate, displayedComponents: .date)
                     }
                 }
 
@@ -44,44 +53,82 @@ struct ExportProfileEditView: View {
                     Toggle("Include Monthly Total", isOn: $includeMonthlyTotal)
                 }
 
-                Section(header: Text("Overrides")) {
-                    Picker("Time Format", selection: timeFormatBinding) {
+                Section(header: Text("Time Format")) {
+                    Picker("Time Format", selection: $timeFormatOverride) {
                         Text("12-hour").tag(TimeFormat.hour12)
                         Text("24-hour").tag(TimeFormat.hour24)
                     }
-                    TextField("Currency Override", text: currencyBinding)
                 }
 
                 Section {
                     Button("Save") {
-                        let newProfile = ExportProfile(
+                        let savedProfile = ExportProfile(
                             id: profile?.id ?? UUID(),
-                            name: name,
+                            name: mode == .exportSettings ? "Export Settings" : name,
                             selectedColumns: selectedColumns,
                             includeMonthlyTotal: includeMonthlyTotal,
-                            dateRange: dateRange,
-                            formats: formats,
+                            dateRange: resolvedDateRange,
+                            formats: mode == .exportSettings ? ExportFormat.allCases : (profile?.formats ?? [.pdf]),
                             timeFormatOverride: timeFormatOverride,
-                            currencyOverride: currencyOverride
+                            currencyOverride: nil
                         )
-                        exportVM.saveProfile(newProfile)
-                        profile = nil
+
+                        if mode == .exportSettings {
+                            exportVM.saveExportSettings(savedProfile)
+                        } else {
+                            exportVM.saveProfile(savedProfile)
+                            profile = nil
+                        }
+                        dismiss()
                     }
-                    .disabled(name.isEmpty || formats.isEmpty)
+                    .disabled(mode == .profile && name.isEmpty)
                 }
             }
-            .navigationTitle(profile == nil ? "New Profile" : "Edit Profile")
+            .navigationTitle(mode == .exportSettings ? "Export Settings" : (profile == nil ? "New Profile" : "Edit Profile"))
             .onAppear {
-                if let p = profile {
-                    name = p.name
-                    selectedColumns = p.selectedColumns
-                    includeMonthlyTotal = p.includeMonthlyTotal
-                    formats = p.formats
-                    dateRange = p.dateRange
-                    timeFormatOverride = p.timeFormatOverride
-                    currencyOverride = p.currencyOverride
-                }
+                populateForm()
             }
+        }
+    }
+
+    private var resolvedDateRange: ExportDateRange {
+        switch dateRangeSelection {
+        case .currentMonth:
+            return .currentMonth
+        case .previousMonth:
+            return .previousMonth
+        case .nextMonth:
+            return .nextMonth
+        case .custom:
+            return .custom(start: customStartDate, end: customEndDate)
+        }
+    }
+
+    private func populateForm() {
+        let sourceProfile: ExportProfile
+        switch mode {
+        case .profile:
+            sourceProfile = profile ?? ExportProfile(name: "")
+        case .exportSettings:
+            sourceProfile = exportVM.exportSettings
+        }
+
+        name = sourceProfile.name == "Export Settings" ? "" : sourceProfile.name
+        selectedColumns = sourceProfile.selectedColumns
+        includeMonthlyTotal = sourceProfile.includeMonthlyTotal
+        timeFormatOverride = sourceProfile.timeFormatOverride ?? .hour24
+
+        switch sourceProfile.dateRange {
+        case .currentMonth:
+            dateRangeSelection = .currentMonth
+        case .previousMonth:
+            dateRangeSelection = .previousMonth
+        case .nextMonth:
+            dateRangeSelection = .nextMonth
+        case let .custom(start, end):
+            dateRangeSelection = .custom
+            customStartDate = start
+            customEndDate = end
         }
     }
 
@@ -99,33 +146,11 @@ struct ExportProfileEditView: View {
             }
         )
     }
+}
 
-    private func formatBinding(for format: ExportFormat) -> Binding<Bool> {
-        Binding(
-            get: { formats.contains(format) },
-            set: { isSelected in
-                if isSelected {
-                    if !formats.contains(format) {
-                        formats.append(format)
-                    }
-                } else {
-                    formats.removeAll { $0 == format }
-                }
-            }
-        )
-    }
-
-    private var timeFormatBinding: Binding<TimeFormat> {
-        Binding(
-            get: { timeFormatOverride ?? .hour24 },
-            set: { timeFormatOverride = $0 }
-        )
-    }
-
-    private var currencyBinding: Binding<String> {
-        Binding(
-            get: { currencyOverride ?? "" },
-            set: { currencyOverride = $0.isEmpty ? nil : $0 }
-        )
-    }
+private enum ExportRangeSelection: Hashable {
+    case currentMonth
+    case previousMonth
+    case nextMonth
+    case custom
 }
