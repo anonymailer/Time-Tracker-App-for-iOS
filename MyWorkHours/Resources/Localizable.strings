@@ -1,0 +1,57 @@
+/* Tabs */
+"Calendar" = "Calendar";
+"Reports" = "Reports";
+"Templates" = "Templates";
+"Settings" = "Settings";
+
+/* CalendarView / DayEntrySheetView */
+"Add/Edit" = "Add/Edit";
+"From" = "From";
+"To" = "To";
+"Hours" = "Hours";
+"Payout" = "Payout";
+"Notes" = "Notes";
+"Save" = "Save";
+"Apply Default Template" = "Apply Default Template";
+"No entry for this day" = "No entry for this day";
+"Edit Day" = "Edit Day";
+
+/* Template Views */
+"Template Name" = "Template Name";
+"New Template" = "New Template";
+"Edit Template" = "Edit Template";
+"Default Template" = "Default Template";
+"From Time" = "From";
+"To Time" = "To";
+"Hourly Rate" = "Hourly Rate";
+
+/* ReportsView */
+"Reports" = "Reports";
+"Day" = "Day";
+"Timings" = "Timings";
+"Monthly Total" = "Monthly Total";
+
+/* Export Profiles */
+"Export Profiles" = "Export Profiles";
+"New Profile" = "New Profile";
+"Edit Profile" = "Edit Profile";
+"Profile Name" = "Profile Name";
+"Columns" = "Columns";
+"Formats" = "Formats";
+"Date Range" = "Date Range";
+"Include Monthly Total" = "Include Monthly Total";
+"Time Format" = "Time Format";
+"Currency Override" = "Currency Override";
+
+/* SettingsView */
+"Theme" = "Theme";
+"App Theme" = "App Theme";
+"Light" = "Light";
+"Dark" = "Dark";
+"System" = "System";
+"Time Format" = "Time Format";
+"12-hour" = "12-hour";
+"24-hour" = "24-hour";
+"Currency" = "Currency";
+"Language" = "Language";
+"Language code (e.g., en, es)" = "Language code (e.g., en, es)";

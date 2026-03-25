@@ -1,0 +1,34 @@
+import Foundation
+
+struct WorkDay: Identifiable {
+    var id = UUID()
+    var date: Date
+    var fromTime: Date
+    var toTime: Date
+    var hourlyRate: Double
+    var notes: String
+
+    var totalMinutes: Int {
+        let diff = Calendar.current.dateComponents([.minute], from: fromTime, to: toTime)
+        return diff.minute ?? 0
+    }
+
+    var totalPayout: Double {
+        Double(totalMinutes)/60 * hourlyRate
+    }
+
+    var fromTimeString: String {
+        DateFormatterHelper.time.string(from: fromTime)
+    }
+
+    var toTimeString: String {
+        DateFormatterHelper.time.string(from: toTime)
+    }
+
+    var hourlyRateString: String { String(format: "%.2f", hourlyRate) }
+    var totalHoursString: String {
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        return String(format: "%02d:%02d", hours, minutes)
+    }
+}
