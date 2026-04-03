@@ -9,10 +9,15 @@
 "From" = "From";
 "To" = "To";
 "Hours" = "Hours";
+"Work Hours" = "Work Hours";
 "Payout" = "Payout";
 "Notes" = "Notes";
 "Save" = "Save";
-"Apply Default Template" = "Apply Default Template";
+"Templates" = "Templates";
+"Select Template" = "Select Template";
+"Choose Template" = "Choose Template";
+"Apply Selected Template" = "Apply Selected Template";
+"No templates available" = "No templates available";
 "No entry for this day" = "No entry for this day";
 "Edit Day" = "Edit Day";
 
@@ -20,7 +25,7 @@
 "Template Name" = "Template Name";
 "New Template" = "New Template";
 "Edit Template" = "Edit Template";
-"Default Template" = "Default Template";
+"Break Time" = "Break Time";
 "From Time" = "From";
 "To Time" = "To";
 "Hourly Rate" = "Hourly Rate";

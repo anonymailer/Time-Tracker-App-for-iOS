@@ -5,12 +5,17 @@ struct WorkDay: Identifiable {
     var date: Date
     var fromTime: Date
     var toTime: Date
+    var breakMinutes: Int = 0
     var hourlyRate: Double
     var notes: String
 
     var totalMinutes: Int {
         let diff = Calendar.current.dateComponents([.minute], from: fromTime, to: toTime)
         return diff.minute ?? 0
+    }
+
+    var displayedToTime: Date {
+        Calendar.current.date(byAdding: .minute, value: breakMinutes, to: toTime) ?? toTime
     }
 
     var totalPayout: Double {
@@ -22,7 +27,7 @@ struct WorkDay: Identifiable {
     }
 
     var toTimeString: String {
-        DateFormatterHelper.time.string(from: toTime)
+        DateFormatterHelper.time.string(from: displayedToTime)
     }
 
     var hourlyRateString: String { String(format: "%.2f", hourlyRate) }

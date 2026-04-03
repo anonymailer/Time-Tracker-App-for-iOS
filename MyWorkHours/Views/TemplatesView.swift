@@ -13,9 +13,15 @@ struct TemplatesView: View {
                         VStack(alignment: .leading) {
                             Text(template.name)
                                 .font(.headline)
-                            Text("\(template.fromTimeString) - \(template.toTimeString) | \(template.hourlyRateString)/hr")
+                            Text(templateSummary(template))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+                            if !template.notes.isEmpty {
+                                Text(template.notes)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(2)
+                            }
                         }
                         Spacer()
                         if template.isDefault {
@@ -49,5 +55,10 @@ struct TemplatesView: View {
                     .environmentObject(templatesVM)
             }
         }
+    }
+
+    private func templateSummary(_ template: WorkTemplate) -> String {
+        let breakSummary = template.breakMinutes > 0 ? " | Break \(template.breakMinutes)m" : ""
+        return "\(template.fromTimeString) - \(template.toTimeString)\(breakSummary) | \(template.hourlyRateString)/hr"
     }
 }

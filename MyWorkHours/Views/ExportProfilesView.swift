@@ -1,51 +1,66 @@
 import SwiftUI
 
 struct ExportProfilesView: View {
-    @EnvironmentObject var calendarVM: CalendarViewModel
-    @EnvironmentObject var settings: SettingsViewModel
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var exportVM: ExportProfilesViewModel
 
-    @State private var editingProfile: ExportProfile? = nil
+    let onExportProfile: (ExportProfile) -> Void
+    let onCopyProfile: (ExportProfile) -> Void
+
     @State private var showEditSheet = false
 
     var body: some View {
         NavigationView {
             List {
-                ForEach(exportVM.profiles) { profile in
-                    HStack {
-                        Text(profile.name)
-                        Spacer()
-                        if profile.id == exportVM.defaultProfile?.id {
-                            Image(systemName: "star.fill").foregroundColor(.yellow)
-                        }
+                Section("Quick Export") {
+                    Button {
+                        onExportProfile(exportVM.profileUsingSettings(format: .pdf))
+                        dismiss()
+                    } label: {
+                        quickActionRow(title: "Export PDF", systemImage: "doc.richtext")
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        editingProfile = profile
-                        showEditSheet = true
+
+                    Button {
+                        onExportProfile(exportVM.profileUsingSettings(format: .txt))
+                        dismiss()
+                    } label: {
+                        quickActionRow(title: "Export TXT", systemImage: "doc.text")
                     }
-                }
-                .onDelete { indexSet in
-                    exportVM.deleteProfiles(at: indexSet)
+
+                    Button {
+                        onExportProfile(exportVM.profileUsingSettings(format: .csv))
+                        dismiss()
+                    } label: {
+                        quickActionRow(title: "Export CSV", systemImage: "tablecells")
+                    }
+
+                    Button {
+                        onCopyProfile(exportVM.copyProfileUsingSettings)
+                        dismiss()
+                    } label: {
+                        quickActionRow(title: "Copy Report", systemImage: "doc.on.doc")
+                    }
                 }
             }
-            .navigationTitle("Export Profiles")
+            .navigationTitle("Export Report")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        editingProfile = nil
                         showEditSheet = true
                     }) {
-                        Image(systemName: "plus")
+                        Image(systemName: "slider.horizontal.3")
                     }
                 }
             }
             .sheet(isPresented: $showEditSheet) {
-                ExportProfileEditView(profile: $editingProfile)
+                ExportProfileEditView()
                     .environmentObject(exportVM)
-                    .environmentObject(calendarVM)
-                    .environmentObject(settings)
             }
         }
+    }
+
+    @ViewBuilder
+    private func quickActionRow(title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
     }
 }

@@ -3,18 +3,31 @@ import SwiftUI
 import Combine
 
 class ExportProfilesViewModel: ObservableObject {
-    @Published var profiles: [ExportProfile] = []
+    @Published var exportSettings = ExportProfile(
+        name: "Export Settings",
+        selectedColumns: [.day, .timings, .hours, .payout, .notes],
+        includeMonthlyTotal: true,
+        dateRange: .currentMonth,
+        formats: ExportFormat.allCases,
+        timeFormatOverride: .hour24,
+        currencyOverride: nil
+    )
 
-    var defaultProfile: ExportProfile? {
-        profiles.first
+    func saveExportSettings(_ settings: ExportProfile) {
+        exportSettings = settings
     }
 
-    func saveProfile(_ profile: ExportProfile) {
-        profiles.removeAll { $0.id == profile.id }
-        profiles.append(profile)
+    func profileUsingSettings(format: ExportFormat) -> ExportProfile {
+        var profile = exportSettings
+        profile.name = "Quick \(format.rawValue.uppercased())"
+        profile.formats = [format]
+        return profile
     }
 
-    func deleteProfiles(at offsets: IndexSet) {
-        profiles.remove(atOffsets: offsets)
+    var copyProfileUsingSettings: ExportProfile {
+        var profile = exportSettings
+        profile.name = "Quick Copy"
+        profile.formats = [.txt]
+        return profile
     }
 }

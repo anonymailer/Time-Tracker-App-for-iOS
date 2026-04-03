@@ -12,48 +12,35 @@ struct CalendarView: View {
 
     var body: some View {
         NavigationView {
-            VStack {
-                CalendarPickerView(
-                    selectedDate: $selectedDate,
-                    selectedDates: $selectedDates,
-                    isSelectingMultipleDates: $isSelectingMultipleDates,
-                    entryDates: calendarVM.entries.map(\.date)
-                )
-                .frame(height: 360)
-                .padding(.horizontal)
+            VStack(spacing: 16) {
+                VStack(spacing: 12) {
+                    CalendarPickerView(
+                        selectedDate: $selectedDate,
+                        selectedDates: $selectedDates,
+                        isSelectingMultipleDates: $isSelectingMultipleDates,
+                        entryDates: calendarVM.entries.map(\.date)
+                    )
+                    .frame(height: 420)
+                    .padding(.horizontal)
 
-                if isSelectingMultipleDates {
-                    if !selectedDates.isEmpty {
-                        Text(selectionSummary)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
+                    if isSelectingMultipleDates {
+                        if !selectedDates.isEmpty {
+                            Text(selectionSummary)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
 
-                    Button("Cancel Selection") {
-                        cancelSelection()
+                        Button("Cancel Selection") {
+                            cancelSelection()
+                        }
+                        .foregroundColor(.red)
                     }
-                    .foregroundColor(.red)
-                    .padding(.top, 8)
                 }
-
-                if let entry = calendarVM.entry(for: selectedDate) {
-                    VStack(alignment: .leading) {
-                        Text("From: \(entry.fromTimeString)")
-                        Text("To: \(entry.toTimeString)")
-                        Text("Hours: \(entry.totalHoursString)")
-                        Text("Payout: \(String(format: "%.2f", entry.totalPayout))")
-                        Text("Notes: \(entry.notes)")
-                    }
-                    .padding()
-                } else {
-                    Text("No entry for this day")
-                        .padding()
-                }
-
-                Spacer()
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top)
             .navigationTitle("Calendar")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -77,7 +64,32 @@ struct CalendarView: View {
                     .environmentObject(calendarVM)
                     .environmentObject(templatesVM)
             }
+            .safeAreaInset(edge: .bottom) {
+                selectedEntryDetails
+                    .padding(.top, 12)
+            }
         }
+    }
+
+    private var selectedEntryDetails: some View {
+        Group {
+            if let entry = calendarVM.entry(for: selectedDate) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("From: \(entry.fromTimeString)")
+                    Text("To: \(entry.toTimeString)")
+                    Text("Work Hours: \(entry.totalHoursString)")
+                    Text("Payout: \(String(format: "%.2f", entry.totalPayout))")
+                    Text("Notes: \(entry.notes)")
+                }
+            } else {
+                Text("No entry for this day")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal)
+        .padding(.bottom, 12)
     }
 
     private var entryDates: [Date] {

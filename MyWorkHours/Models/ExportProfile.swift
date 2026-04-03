@@ -17,6 +17,8 @@ enum ExportColumn: String, Codable, CaseIterable, Hashable {
 
 enum ExportDateRange: Codable, Hashable {
     case currentMonth
+    case previousMonth
+    case nextMonth
     case custom(start: Date, end: Date)
 }
 

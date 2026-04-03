@@ -4,6 +4,9 @@ import PDFKit
 import UIKit
 
 class ExportEngine {
+    private static let textColumnSeparator = "    "
+    private static let visualColumnGutter: CGFloat = 14
+
     private struct ExportColumnLayout {
         let column: ExportColumn
         let title: String
@@ -43,7 +46,7 @@ class ExportEngine {
 
     private static func generateCSV(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> URL? {
         var lines: [String] = []
-        lines.append(profile.selectedColumns.map(columnTitle(for:)).joined(separator: ","))
+        lines.append(profile.selectedColumns.map { columnTitle(for: $0) }.joined(separator: ","))
 
         for entry in entries {
             let row = profile.selectedColumns.map { csvValue(for: $0, entry: entry, settings: settings) }
@@ -75,7 +78,7 @@ class ExportEngine {
 
     private static func generatePDF(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> URL? {
         let layouts = columnLayouts(for: entries, profile: profile, settings: settings, baseFont: UIFont.systemFont(ofSize: 12), boldFont: UIFont.boldSystemFont(ofSize: 12))
-        let totalWidth = layouts.reduce(CGFloat(40)) { $0 + $1.width }
+        let totalWidth = layouts.reduce(CGFloat(40)) { $0 + $1.width } + (CGFloat(max(layouts.count - 1, 0)) * visualColumnGutter)
         let pageWidth = max(595, totalWidth + 20)
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: pageWidth, height: 842))
 
@@ -104,7 +107,7 @@ class ExportEngine {
                     width: layout.width,
                     attributes: layout.textAlignment == .right ? rightBoldAttributes : leftBoldAttributes
                 )
-                xPosition += layout.width
+                xPosition += layout.width + visualColumnGutter
             }
             yPosition += lineHeight
 
@@ -118,7 +121,7 @@ class ExportEngine {
                         width: layout.width,
                         attributes: layout.textAlignment == .right ? rightAttributes : leftAttributes
                     )
-                    xPosition += layout.width
+                    xPosition += layout.width + visualColumnGutter
                 }
                 yPosition += lineHeight
             }
@@ -136,7 +139,7 @@ class ExportEngine {
                         width: layout.width,
                         attributes: layout.textAlignment == .right ? rightBoldAttributes : leftBoldAttributes
                     )
-                    xPosition += layout.width
+                    xPosition += layout.width + visualColumnGutter
                 }
             }
         }
@@ -148,21 +151,21 @@ class ExportEngine {
         let widths = textColumnWidths(for: entries, profile: profile, settings: settings)
         let header = profile.selectedColumns
             .map { padded(columnTitle(for: $0), width: widths[$0] ?? columnTitle(for: $0).count, alignment: textAlignment(for: $0)) }
-            .joined(separator: "   ")
+            .joined(separator: textColumnSeparator)
         let divider = String(repeating: "-", count: max(20, header.count))
 
         var lines = [header, divider]
         lines.append(contentsOf: entries.map { entry in
             profile.selectedColumns
                 .map { padded(displayValue(for: $0, entry: entry, settings: settings), width: widths[$0] ?? 0, alignment: textAlignment(for: $0)) }
-                .joined(separator: "   ")
+                .joined(separator: textColumnSeparator)
         })
 
         if profile.includeMonthlyTotal {
             let totals = monthlyTotals(entries: entries, settings: settings)
             let totalLine = profile.selectedColumns
                 .map { padded(totalValue(for: $0, totals: totals), width: widths[$0] ?? 0, alignment: textAlignment(for: $0)) }
-                .joined(separator: "   ")
+                .joined(separator: textColumnSeparator)
             lines.append(divider)
             lines.append(totalLine)
         }
@@ -179,7 +182,7 @@ class ExportEngine {
         let verticalPadding: CGFloat = 20
         let dividerHeight: CGFloat = 1
 
-        let totalWidth = layouts.reduce(horizontalPadding * 2) { $0 + $1.width }
+        let totalWidth = layouts.reduce(horizontalPadding * 2) { $0 + $1.width } + (CGFloat(max(layouts.count - 1, 0)) * visualColumnGutter)
         let totalRows = CGFloat(entries.count + 1 + (profile.includeMonthlyTotal ? 1 : 0))
         let totalDividers = CGFloat(entries.count + 1)
         let totalHeight = verticalPadding * 2 + totalRows * rowHeight + totalDividers * dividerHeight
@@ -194,7 +197,7 @@ class ExportEngine {
             var x = horizontalPadding
             for layout in layouts {
                 drawImageText(layout.title, x: x, y: y, width: layout.width, font: boldFont, alignment: layout.textAlignment)
-                x += layout.width
+                x += layout.width + visualColumnGutter
             }
 
             y += rowHeight
@@ -205,7 +208,7 @@ class ExportEngine {
                 x = horizontalPadding
                 for layout in layouts {
                     drawImageText(displayValue(for: layout.column, entry: entry, settings: settings), x: x, y: y, width: layout.width, font: font, alignment: layout.textAlignment)
-                    x += layout.width
+                    x += layout.width + visualColumnGutter
                 }
                 y += rowHeight
                 drawDivider(in: cgContext, y: y, width: totalWidth, horizontalPadding: horizontalPadding)
@@ -217,7 +220,7 @@ class ExportEngine {
                 x = horizontalPadding
                 for layout in layouts {
                     drawImageText(totalValue(for: layout.column, totals: totals), x: x, y: y, width: layout.width, font: boldFont, alignment: layout.textAlignment)
-                    x += layout.width
+                    x += layout.width + visualColumnGutter
                 }
             }
         }
@@ -252,7 +255,7 @@ class ExportEngine {
         switch column {
         case .day: return "Day"
         case .timings: return "Timings"
-        case .hours: return "Hours"
+        case .hours: return "Work Hours"
         case .payout: return "Payout"
         case .notes: return "Notes"
         }
@@ -263,7 +266,7 @@ class ExportEngine {
         case .day:
             return DateFormatterHelper.dayFull.string(from: entry.date)
         case .timings:
-            return "\(DateFormatterHelper.time.string(from: entry.fromTime))-\(DateFormatterHelper.time.string(from: entry.toTime))"
+            return "\(DateFormatterHelper.time.string(from: entry.fromTime))-\(DateFormatterHelper.time.string(from: entry.displayedToTime))"
         case .hours:
             return entry.totalHoursString
         case .payout:
@@ -313,7 +316,7 @@ class ExportEngine {
         case .timings: return 100
         case .hours: return 60
         case .payout: return 80
-        case .notes: return 100
+        case .notes: return 140
         }
     }
 

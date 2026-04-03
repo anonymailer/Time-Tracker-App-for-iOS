@@ -17,6 +17,7 @@ struct ExportProfileEditView: View {
                 Section(header: Text("Columns")) {
                     ForEach(ExportColumn.allCases, id: \.self) { column in
                         Toggle(column.rawValue.capitalized, isOn: columnBinding(for: column))
+                            .disabled(column == .day)
                     }
                 }
 
@@ -84,7 +85,7 @@ struct ExportProfileEditView: View {
 
     private func populateForm() {
         let settings = exportVM.exportSettings
-        selectedColumns = settings.selectedColumns
+        selectedColumns = normalizedColumns(from: settings.selectedColumns)
         includeMonthlyTotal = settings.includeMonthlyTotal
         timeFormatOverride = settings.timeFormatOverride ?? .hour24
 
@@ -106,15 +107,26 @@ struct ExportProfileEditView: View {
         Binding(
             get: { selectedColumns.contains(column) },
             set: { isSelected in
+                if column == .day {
+                    selectedColumns = normalizedColumns(from: selectedColumns + [.day])
+                    return
+                }
+
                 if isSelected {
                     if !selectedColumns.contains(column) {
-                        selectedColumns.append(column)
+                        selectedColumns = normalizedColumns(from: selectedColumns + [column])
                     }
                 } else {
-                    selectedColumns.removeAll { $0 == column }
+                    selectedColumns = normalizedColumns(from: selectedColumns.filter { $0 != column })
                 }
             }
         )
+    }
+
+    private func normalizedColumns(from columns: [ExportColumn]) -> [ExportColumn] {
+        ExportColumn.allCases.filter { column in
+            column == .day || columns.contains(column)
+        }
     }
 }
 
