@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TemplatesView: View {
     @EnvironmentObject var templatesVM: TemplatesViewModel
+    @EnvironmentObject var settings: SettingsViewModel
     @State private var showEditSheet = false
     @State private var editingTemplate: WorkTemplate? = nil
 
@@ -59,6 +60,10 @@ struct TemplatesView: View {
 
     private func templateSummary(_ template: WorkTemplate) -> String {
         let breakSummary = template.breakMinutes > 0 ? " | Break \(template.breakMinutes)m" : ""
-        return "\(template.fromTimeString) - \(template.toTimeString)\(breakSummary) | \(template.hourlyRateString)/hr"
+        return "\(timeString(template.fromTime)) - \(timeString(template.displayedToTime))\(breakSummary) | \(template.hourlyRateString)/hr"
+    }
+
+    private func timeString(_ date: Date) -> String {
+        DateFormatterHelper.timeFormatter(for: settings.timeFormat).string(from: date)
     }
 }

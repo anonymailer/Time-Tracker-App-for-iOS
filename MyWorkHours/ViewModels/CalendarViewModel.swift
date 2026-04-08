@@ -3,7 +3,21 @@ import SwiftUI
 import Combine
 
 class CalendarViewModel: ObservableObject {
-    @Published var entries: [WorkDay] = []
+    var onChange: (() -> Void)?
+
+    @Published var entries: [WorkDay] = [] {
+        didSet {
+            onChange?()
+        }
+    }
+
+    init(entries: [WorkDay] = []) {
+        self.entries = entries
+    }
+
+    func apply(entries: [WorkDay]) {
+        self.entries = entries
+    }
 
     func entry(for date: Date) -> WorkDay? {
         entries.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
@@ -28,6 +42,14 @@ class CalendarViewModel: ObservableObject {
     func saveEntries(for dates: [Date], from: Date, to: Date, hourlyRate: String, notes: String, breakMinutes: Int? = nil) {
         dates.forEach { date in
             saveEntry(for: date, from: from, to: to, hourlyRate: hourlyRate, notes: notes, breakMinutes: breakMinutes)
+        }
+    }
+
+    func deleteEntries(for dates: [Date]) {
+        entries.removeAll { entry in
+            dates.contains { date in
+                Calendar.current.isDate(entry.date, inSameDayAs: date)
+            }
         }
     }
 

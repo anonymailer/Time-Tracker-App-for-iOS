@@ -3,6 +3,9 @@ import Foundation
 struct ExportProfile: Identifiable, Codable {
     var id: UUID = UUID()
     var name: String
+    var personName: String = ""
+    var firmName: String = ""
+    var reportPeriodTitle: String? = nil
     var selectedColumns: [ExportColumn] = [.day, .timings, .hours, .payout, .notes]
     var includeMonthlyTotal: Bool = true
     var dateRange: ExportDateRange = .currentMonth

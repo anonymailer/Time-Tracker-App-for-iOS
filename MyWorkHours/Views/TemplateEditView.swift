@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TemplateEditView: View {
     @EnvironmentObject var templatesVM: TemplatesViewModel
+    @EnvironmentObject var settings: SettingsViewModel
     @Environment(\.dismiss) private var dismiss
     @Binding var template: WorkTemplate?
 
@@ -32,6 +33,8 @@ struct TemplateEditView: View {
                         DatePicker("", selection: $fromTime, displayedComponents: .hourAndMinute)
                             .labelsHidden()
                             .datePickerStyle(.compact)
+                            .environment(\.locale, timePickerLocale)
+                            .id("template-from-\(timePickerLocale.identifier)")
                     }
                     HStack {
                         Text("To")
@@ -39,6 +42,8 @@ struct TemplateEditView: View {
                         DatePicker("", selection: $toTime, displayedComponents: .hourAndMinute)
                             .labelsHidden()
                             .datePickerStyle(.compact)
+                            .environment(\.locale, timePickerLocale)
+                            .id("template-to-\(timePickerLocale.identifier)")
                     }
                     HStack {
                         Text("Break Time")
@@ -141,5 +146,14 @@ struct TemplateEditView: View {
         breakMinutes = components.minutes
         hourlyRate = String(format: "%.2f", template.hourlyRate)
         notes = template.notes
+    }
+
+    private var timePickerLocale: Locale {
+        switch settings.timeFormat {
+        case .hour12:
+            return Locale(identifier: "en_US")
+        case .hour24:
+            return Locale(identifier: "en_GB")
+        }
     }
 }

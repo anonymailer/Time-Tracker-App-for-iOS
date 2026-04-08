@@ -3,7 +3,21 @@ import SwiftUI
 import Combine
 
 class TemplatesViewModel: ObservableObject {
-    @Published var templates: [WorkTemplate] = []
+    var onChange: (() -> Void)?
+
+    @Published var templates: [WorkTemplate] = [] {
+        didSet {
+            onChange?()
+        }
+    }
+
+    init(templates: [WorkTemplate] = []) {
+        self.templates = templates
+    }
+
+    func apply(templates: [WorkTemplate]) {
+        self.templates = templates
+    }
 
     func saveTemplate(_ template: WorkTemplate) {
         templates.removeAll { $0.id == template.id }

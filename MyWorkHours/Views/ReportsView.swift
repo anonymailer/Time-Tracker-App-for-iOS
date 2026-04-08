@@ -3,17 +3,15 @@ import UIKit
 
 struct ReportsView: View {
     private struct ReportRow: Identifiable {
-        let id = UUID()
-        let day: String
-        let timings: String
-        let workHours: String
-        let payout: String
-        let notes: String
+        let date: Date
+        let entry: WorkDay?
+
+        var id: Date { date }
     }
 
     @EnvironmentObject var calendarVM: CalendarViewModel
     @EnvironmentObject var settings: SettingsViewModel
-    @StateObject private var exportVM = ExportProfilesViewModel()
+    @EnvironmentObject var exportVM: ExportProfilesViewModel
 
     @State private var currentMonth: Date = Date()
     @State private var showExportSheet = false
@@ -25,6 +23,10 @@ struct ReportsView: View {
     var body: some View {
         NavigationView {
             VStack {
+                reportHeader
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+
                 // Month navigation
                 HStack {
                     Button(action: { previousMonth() }) { Image(systemName: "chevron.left") }
@@ -50,12 +52,12 @@ struct ReportsView: View {
 
                         ForEach(reportRows) { row in
                             HStack {
-                                Text(row.day).frame(width: dayColumnWidth, alignment: .leading)
-                                Text(row.timings).frame(width: timingsColumnWidth, alignment: .leading)
-                                Text(row.workHours).frame(width: hoursColumnWidth, alignment: .trailing)
-                                Text(row.payout).frame(width: payoutColumnWidth, alignment: .trailing)
+                                Text(dayString(row.date)).frame(width: dayColumnWidth, alignment: .leading)
+                                Text(row.entry.map(timingsString) ?? "--").frame(width: timingsColumnWidth, alignment: .leading)
+                                Text(row.entry.map(totalHoursString) ?? "--").frame(width: hoursColumnWidth, alignment: .trailing)
+                                Text(row.entry.map(payoutString) ?? "--").frame(width: payoutColumnWidth, alignment: .trailing)
                                 Spacer().frame(width: 12)
-                                Text(row.notes).frame(width: notesColumnWidth, alignment: .leading)
+                                Text(row.entry?.notes ?? "").frame(width: notesColumnWidth, alignment: .leading)
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 4)
@@ -64,7 +66,7 @@ struct ReportsView: View {
 
                         HStack {
                             Text("Monthly Total").bold().frame(width: dayColumnWidth, alignment: .leading)
-                            Text("").frame(width: timingsColumnWidth, alignment: .leading)
+                            Text(totalWorkDaysInMonth()).bold().frame(width: timingsColumnWidth, alignment: .leading)
                             Text(totalHoursInMonth()).bold().frame(width: hoursColumnWidth, alignment: .trailing)
                             Text(totalPayoutInMonth()).bold().frame(width: payoutColumnWidth, alignment: .trailing)
                             Spacer().frame(width: 12)
@@ -75,6 +77,7 @@ struct ReportsView: View {
                     }
                 }
             }
+            .id(settings.timeFormat)
             .navigationTitle("Reports")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -104,6 +107,24 @@ struct ReportsView: View {
                 }
             }
         }
+        .id(settings.timeFormat)
+    }
+
+    private var reportHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !exportVM.exportSettings.firmName.isEmpty {
+                Text(exportVM.exportSettings.firmName)
+                    .font(.title3.weight(.bold))
+            }
+            if !exportVM.exportSettings.personName.isEmpty {
+                Text(exportVM.exportSettings.personName)
+                    .font(.subheadline)
+            }
+            Text(currentReportPeriodTitle)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Helpers
@@ -120,37 +141,34 @@ struct ReportsView: View {
         return formatter.string(from: currentMonth)
     }
 
+    private var currentReportPeriodTitle: String {
+        "Report for the month of \(monthYearString)"
+    }
+
     private var reportRows: [ReportRow] {
         daysInMonth.map { date in
-            let entry = calendarVM.entry(for: date)
-            return ReportRow(
-                day: dayString(date),
-                timings: entry.map { "\(timeString($0.fromTime))-\(timeString($0.displayedToTime))" } ?? "--",
-                workHours: entry.map(totalHoursString) ?? "--",
-                payout: entry.map(payoutString) ?? "--",
-                notes: entry?.notes ?? ""
-            )
+            ReportRow(date: date, entry: calendarVM.entry(for: date))
         }
     }
 
     private var dayColumnWidth: CGFloat {
-        columnWidth(header: "Day", values: reportRows.map(\.day) + ["Monthly Total"])
+        columnWidth(header: "Day", values: reportRows.map { dayString($0.date) } + ["Monthly Total"])
     }
 
     private var timingsColumnWidth: CGFloat {
-        columnWidth(header: "Timings", values: reportRows.map(\.timings))
+        columnWidth(header: "Timings", values: reportRows.map { $0.entry.map(timingsString) ?? "--" } + [totalWorkDaysInMonth()])
     }
 
     private var hoursColumnWidth: CGFloat {
-        columnWidth(header: "Work Hours", values: reportRows.map(\.workHours) + [totalHoursInMonth()], minimum: 90, alignment: .right)
+        columnWidth(header: "Work Hours", values: reportRows.map { $0.entry.map(totalHoursString) ?? "--" } + [totalHoursInMonth()], minimum: 90, alignment: .right)
     }
 
     private var payoutColumnWidth: CGFloat {
-        columnWidth(header: "Payout", values: reportRows.map(\.payout) + [totalPayoutInMonth()], minimum: 80, alignment: .right)
+        columnWidth(header: "Payout", values: reportRows.map { $0.entry.map(payoutString) ?? "--" } + [totalPayoutInMonth()], minimum: 80, alignment: .right)
     }
 
     private var notesColumnWidth: CGFloat {
-        columnWidth(header: "Notes", values: reportRows.map(\.notes), minimum: 140)
+        columnWidth(header: "Notes", values: reportRows.map { $0.entry?.notes ?? "" }, minimum: 140)
     }
 
     func previousMonth() { currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth }
@@ -163,12 +181,25 @@ struct ReportsView: View {
     }
 
     func timeString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+
+        switch settings.timeFormat {
+        case .hour24:
+            return String(format: "%02d:%02d", hour, minute)
+        case .hour12:
+            let formatter = DateFormatterHelper.timeFormatter(for: .hour12)
+            return formatter.string(from: date)
+        }
     }
 
     func totalHoursString(_ entry: WorkDay) -> String { entry.totalHoursString }
+
+    func timingsString(_ entry: WorkDay) -> String {
+        guard entry.hasWorkingTime else { return "No Working" }
+        return "\(timeString(entry.fromTime))-\(timeString(entry.toTime))"
+    }
 
     func payoutString(_ entry: WorkDay) -> String { "\(settings.currencyCode) \(String(format: "%.2f", entry.totalPayout))" }
 
@@ -182,6 +213,10 @@ struct ReportsView: View {
     func totalPayoutInMonth() -> String {
         let total = entries(for: .currentMonth).reduce(0) { $0 + $1.totalPayout }
         return "\(settings.currencyCode) \(String(format: "%.2f", total))"
+    }
+
+    func totalWorkDaysInMonth() -> String {
+        "Work Days : \(entries(for: .currentMonth).filter(\.hasWorkingTime).count)"
     }
 
     func columnWidth(header: String, values: [String], minimum: CGFloat = 0, alignment: NSTextAlignment = .left) -> CGFloat {
@@ -200,7 +235,7 @@ struct ReportsView: View {
 
     func exportReport(using profile: ExportProfile) {
         let entries = entries(for: profile.dateRange)
-        ExportEngine.export(entries: entries, profile: profile, settings: settings) { url in
+        ExportEngine.export(entries: entries, profile: resolvedProfile(profile), settings: settings) { url in
             guard let url else { return }
             exportURL = url
             showShareSheet = true
@@ -211,9 +246,42 @@ struct ReportsView: View {
         let entries = entries(for: profile.dateRange)
         ExportEngine.copyReportToPasteboard(
             entries: entries,
-            profile: profile,
+            profile: resolvedProfile(profile),
             settings: settings
         )
+    }
+
+    func resolvedProfile(_ profile: ExportProfile) -> ExportProfile {
+        var profile = profile
+        profile.reportPeriodTitle = reportPeriodTitle(for: profile.dateRange)
+        return profile
+    }
+
+    func reportPeriodTitle(for dateRange: ExportDateRange) -> String {
+        switch dateRange {
+        case .currentMonth:
+            return currentReportPeriodTitle
+        case .previousMonth:
+            let previousMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
+            return "Report for the month of \(monthYearString(for: previousMonth))"
+        case .nextMonth:
+            let nextMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+            return "Report for the month of \(monthYearString(for: nextMonth))"
+        case let .custom(start, end):
+            return "Report for the period of \(periodDateString(start))-\(periodDateString(end))"
+        }
+    }
+
+    func monthYearString(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
+    }
+
+    func periodDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd-MM-yyyy"
+        return formatter.string(from: date)
     }
 
     func entries(for dateRange: ExportDateRange) -> [WorkDay] {

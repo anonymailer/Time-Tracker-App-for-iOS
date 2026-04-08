@@ -46,10 +46,11 @@ class ExportEngine {
 
     private static func generateCSV(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> URL? {
         var lines: [String] = []
+        lines.append(contentsOf: reportHeaderLines(for: profile).map(csvEscaped))
         lines.append(profile.selectedColumns.map { columnTitle(for: $0) }.joined(separator: ","))
 
         for entry in entries {
-            let row = profile.selectedColumns.map { csvValue(for: $0, entry: entry, settings: settings) }
+            let row = profile.selectedColumns.map { csvValue(for: $0, entry: entry, profile: profile, settings: settings) }
             lines.append(row.joined(separator: ","))
         }
 
@@ -60,7 +61,7 @@ class ExportEngine {
                 case .day:
                     return "Monthly Total"
                 case .timings:
-                    return ""
+                    return totals.workDays
                 case .hours:
                     return totals.hours
                 case .payout:
@@ -89,6 +90,8 @@ class ExportEngine {
             let lineHeight: CGFloat = 20
             let leftAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 12)]
             let leftBoldAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 12)]
+            let firmFont = UIFont.boldSystemFont(ofSize: 16)
+            let leftFirmAttributes: [NSAttributedString.Key: Any] = [.font: firmFont]
             let rightAttributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont.systemFont(ofSize: 12),
                 .paragraphStyle: paragraphStyle(alignment: .right)
@@ -97,6 +100,27 @@ class ExportEngine {
                 .font: UIFont.boldSystemFont(ofSize: 12),
                 .paragraphStyle: paragraphStyle(alignment: .right)
             ]
+            let headerLines = reportHeaderLines(for: profile)
+
+            for line in headerLines {
+                let attributes = line == profile.firmName ? leftFirmAttributes : leftBoldAttributes
+                drawPDFText(
+                    line,
+                    atX: 20,
+                    y: yPosition,
+                    width: pageWidth - 40,
+                    attributes: attributes
+                )
+                if line == profile.firmName {
+                    yPosition += max(lineHeight + 4, ceil(firmFont.lineHeight) + 6)
+                } else {
+                    yPosition += lineHeight
+                }
+            }
+
+            if !headerLines.isEmpty {
+                yPosition += 8
+            }
 
             var xPosition: CGFloat = 20
             for layout in layouts {
@@ -115,7 +139,7 @@ class ExportEngine {
                 xPosition = 20
                 for layout in layouts {
                     drawPDFText(
-                        displayValue(for: layout.column, entry: entry, settings: settings),
+                        displayValue(for: layout.column, entry: entry, profile: profile, settings: settings),
                         atX: xPosition,
                         y: yPosition,
                         width: layout.width,
@@ -154,10 +178,15 @@ class ExportEngine {
             .joined(separator: textColumnSeparator)
         let divider = String(repeating: "-", count: max(20, header.count))
 
-        var lines = [header, divider]
+        var lines = reportHeaderLines(for: profile)
+        if !lines.isEmpty {
+            lines.append("")
+        }
+        lines.append(header)
+        lines.append(divider)
         lines.append(contentsOf: entries.map { entry in
             profile.selectedColumns
-                .map { padded(displayValue(for: $0, entry: entry, settings: settings), width: widths[$0] ?? 0, alignment: textAlignment(for: $0)) }
+                .map { padded(displayValue(for: $0, entry: entry, profile: profile, settings: settings), width: widths[$0] ?? 0, alignment: textAlignment(for: $0)) }
                 .joined(separator: textColumnSeparator)
         })
 
@@ -176,16 +205,25 @@ class ExportEngine {
     private static func renderClipboardImage(entries: [WorkDay], profile: ExportProfile, settings: SettingsViewModel) -> UIImage? {
         let font = UIFont.systemFont(ofSize: 14)
         let boldFont = UIFont.boldSystemFont(ofSize: 14)
+        let firmFont = UIFont.boldSystemFont(ofSize: 18)
         let layouts = columnLayouts(for: entries, profile: profile, settings: settings, baseFont: font, boldFont: boldFont)
         let rowHeight: CGFloat = 28
         let horizontalPadding: CGFloat = 16
         let verticalPadding: CGFloat = 20
         let dividerHeight: CGFloat = 1
+        let headerLines = reportHeaderLines(for: profile)
+        let headerHeight = headerLines.reduce(CGFloat.zero) { partialResult, line in
+            if line == profile.firmName {
+                return partialResult + max(rowHeight + 4, ceil(firmFont.lineHeight) + 6)
+            } else {
+                return partialResult + rowHeight
+            }
+        }
 
         let totalWidth = layouts.reduce(horizontalPadding * 2) { $0 + $1.width } + (CGFloat(max(layouts.count - 1, 0)) * visualColumnGutter)
         let totalRows = CGFloat(entries.count + 1 + (profile.includeMonthlyTotal ? 1 : 0))
         let totalDividers = CGFloat(entries.count + 1)
-        let totalHeight = verticalPadding * 2 + totalRows * rowHeight + totalDividers * dividerHeight
+        let totalHeight = verticalPadding * 2 + headerHeight + (headerLines.isEmpty ? 0 : 12) + totalRows * rowHeight + totalDividers * dividerHeight
 
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: totalWidth, height: totalHeight))
         return renderer.image { context in
@@ -194,6 +232,19 @@ class ExportEngine {
             cgContext.fill(CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
 
             var y = verticalPadding
+            for line in headerLines {
+                let headerFont = line == profile.firmName ? firmFont : boldFont
+                drawImageText(line, x: horizontalPadding, y: y, width: totalWidth - (horizontalPadding * 2), font: headerFont, alignment: .left)
+                if line == profile.firmName {
+                    y += max(rowHeight + 4, ceil(firmFont.lineHeight) + 6)
+                } else {
+                    y += rowHeight
+                }
+            }
+            if !headerLines.isEmpty {
+                y += 12
+            }
+
             var x = horizontalPadding
             for layout in layouts {
                 drawImageText(layout.title, x: x, y: y, width: layout.width, font: boldFont, alignment: layout.textAlignment)
@@ -207,7 +258,7 @@ class ExportEngine {
             for entry in entries {
                 x = horizontalPadding
                 for layout in layouts {
-                    drawImageText(displayValue(for: layout.column, entry: entry, settings: settings), x: x, y: y, width: layout.width, font: font, alignment: layout.textAlignment)
+                    drawImageText(displayValue(for: layout.column, entry: entry, profile: profile, settings: settings), x: x, y: y, width: layout.width, font: font, alignment: layout.textAlignment)
                     x += layout.width + visualColumnGutter
                 }
                 y += rowHeight
@@ -230,7 +281,7 @@ class ExportEngine {
         let totals = monthlyTotals(entries: entries, settings: settings)
         return Dictionary(uniqueKeysWithValues: profile.selectedColumns.map { column in
             let headerWidth = columnTitle(for: column).count
-            let rowWidth = entries.map { displayValue(for: column, entry: $0, settings: settings).count }.max() ?? 0
+            let rowWidth = entries.map { displayValue(for: column, entry: $0, profile: profile, settings: settings).count }.max() ?? 0
             let totalWidth = totalValue(for: column, totals: totals).count
             return (column, max(headerWidth, rowWidth, totalWidth))
         })
@@ -243,7 +294,7 @@ class ExportEngine {
             let alignment = textAlignment(for: column)
             let width = max(
                 textWidth(title, font: boldFont),
-                entries.map { textWidth(displayValue(for: column, entry: $0, settings: settings), font: baseFont) }.max() ?? 0,
+                entries.map { textWidth(displayValue(for: column, entry: $0, profile: profile, settings: settings), font: baseFont) }.max() ?? 0,
                 textWidth(totalValue(for: column, totals: totals), font: boldFont),
                 minimumWidth(for: column)
             ) + 24
@@ -261,12 +312,14 @@ class ExportEngine {
         }
     }
 
-    private static func displayValue(for column: ExportColumn, entry: WorkDay, settings: SettingsViewModel) -> String {
+    private static func displayValue(for column: ExportColumn, entry: WorkDay, profile: ExportProfile, settings: SettingsViewModel) -> String {
+        let exportTimeFormat = profile.timeFormatOverride ?? settings.timeFormat
         switch column {
         case .day:
             return DateFormatterHelper.dayFull.string(from: entry.date)
         case .timings:
-            return "\(DateFormatterHelper.time.string(from: entry.fromTime))-\(DateFormatterHelper.time.string(from: entry.displayedToTime))"
+            guard entry.hasWorkingTime else { return "No Working" }
+            return "\(timeString(entry.fromTime, format: exportTimeFormat))-\(timeString(entry.toTime, format: exportTimeFormat))"
         case .hours:
             return entry.totalHoursString
         case .payout:
@@ -276,12 +329,12 @@ class ExportEngine {
         }
     }
 
-    private static func totalValue(for column: ExportColumn, totals: (hours: String, payoutDisplay: String, payoutValue: String)) -> String {
+    private static func totalValue(for column: ExportColumn, totals: (workDays: String, hours: String, payoutDisplay: String, payoutValue: String)) -> String {
         switch column {
         case .day:
             return "Monthly Total"
         case .timings:
-            return ""
+            return totals.workDays
         case .hours:
             return totals.hours
         case .payout:
@@ -291,23 +344,24 @@ class ExportEngine {
         }
     }
 
-    private static func csvValue(for column: ExportColumn, entry: WorkDay, settings: SettingsViewModel) -> String {
+    private static func csvValue(for column: ExportColumn, entry: WorkDay, profile: ExportProfile, settings: SettingsViewModel) -> String {
         switch column {
         case .notes:
             return "\"\(entry.notes)\""
         case .payout:
             return String(format: "%.2f", entry.totalPayout)
         default:
-            return displayValue(for: column, entry: entry, settings: settings)
+            return displayValue(for: column, entry: entry, profile: profile, settings: settings)
         }
     }
 
-    private static func monthlyTotals(entries: [WorkDay], settings: SettingsViewModel) -> (hours: String, payoutDisplay: String, payoutValue: String) {
+    private static func monthlyTotals(entries: [WorkDay], settings: SettingsViewModel) -> (workDays: String, hours: String, payoutDisplay: String, payoutValue: String) {
         let totalMinutes = entries.reduce(0) { $0 + $1.totalMinutes }
         let totalHours = String(format: "%02d:%02d", totalMinutes / 60, totalMinutes % 60)
         let totalPayout = entries.reduce(0) { $0 + $1.totalPayout }
         let payoutValue = String(format: "%.2f", totalPayout)
-        return (totalHours, "\(settings.currencyCode) \(payoutValue)", payoutValue)
+        let workDays = entries.filter(\.hasWorkingTime).count
+        return ("Work Days : \(workDays)", totalHours, "\(settings.currencyCode) \(payoutValue)", payoutValue)
     }
 
     private static func minimumWidth(for column: ExportColumn) -> CGFloat {
@@ -317,6 +371,19 @@ class ExportEngine {
         case .hours: return 60
         case .payout: return 80
         case .notes: return 140
+        }
+    }
+
+    private static func timeString(_ date: Date, format: TimeFormat) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+
+        switch format {
+        case .hour24:
+            return String(format: "%02d:%02d", hour, minute)
+        case .hour12:
+            return DateFormatterHelper.timeFormatter(for: .hour12).string(from: date)
         }
     }
 
@@ -343,12 +410,13 @@ class ExportEngine {
     }
 
     private static func drawPDFText(_ text: String, atX x: CGFloat, y: CGFloat, width: CGFloat, attributes: [NSAttributedString.Key: Any]) {
-        let rect = CGRect(x: x, y: y, width: width, height: 18)
+        let font = (attributes[.font] as? UIFont) ?? UIFont.systemFont(ofSize: 12)
+        let rect = CGRect(x: x, y: y, width: width, height: ceil(font.lineHeight) + 6)
         text.draw(in: rect, withAttributes: attributes)
     }
 
     private static func drawImageText(_ text: String, x: CGFloat, y: CGFloat, width: CGFloat, font: UIFont, alignment: NSTextAlignment) {
-        let rect = CGRect(x: x, y: y + 5, width: width, height: 18)
+        let rect = CGRect(x: x, y: y + 5, width: width, height: ceil(font.lineHeight) + 6)
         text.draw(
             in: rect,
             withAttributes: [
@@ -380,5 +448,14 @@ class ExportEngine {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? data.write(to: url)
         return url
+    }
+
+    nonisolated private static func reportHeaderLines(for profile: ExportProfile) -> [String] {
+        [profile.firmName, profile.personName, profile.reportPeriodTitle ?? ""]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    nonisolated private static func csvEscaped(_ line: String) -> String {
+        "\"\(line.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
 }

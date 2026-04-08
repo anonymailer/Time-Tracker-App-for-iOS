@@ -18,5 +18,6 @@ struct ContentView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .id(settings.timeFormat)
     }
 }

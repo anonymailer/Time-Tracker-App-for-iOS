@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkDay: Identifiable {
+struct WorkDay: Identifiable, Codable {
     var id = UUID()
     var date: Date
     var fromTime: Date
@@ -9,13 +9,21 @@ struct WorkDay: Identifiable {
     var hourlyRate: Double
     var notes: String
 
-    var totalMinutes: Int {
+    var spanMinutes: Int {
         let diff = Calendar.current.dateComponents([.minute], from: fromTime, to: toTime)
         return diff.minute ?? 0
     }
 
+    var totalMinutes: Int {
+        max(spanMinutes - breakMinutes, 0)
+    }
+
+    var hasWorkingTime: Bool {
+        totalMinutes > 0
+    }
+
     var displayedToTime: Date {
-        Calendar.current.date(byAdding: .minute, value: breakMinutes, to: toTime) ?? toTime
+        toTime
     }
 
     var totalPayout: Double {

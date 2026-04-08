@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkTemplate: Identifiable {
+struct WorkTemplate: Identifiable, Codable {
     var id: UUID
     var name: String
     var fromTime: Date
@@ -11,15 +11,11 @@ struct WorkTemplate: Identifiable {
     var isDefault: Bool
 
     var fromTimeString: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: fromTime)
+        DateFormatterHelper.time.string(from: fromTime)
     }
 
     var toTimeString: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: displayedToTime)
+        DateFormatterHelper.time.string(from: displayedToTime)
     }
 
     var hourlyRateString: String {

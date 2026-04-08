@@ -1,17 +1,28 @@
 import Foundation
 
 struct DateFormatterHelper {
+    static var currentTimeFormat: TimeFormat = .hour24
+
     static let dayFull: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd-MM-yyyy  EEEE"
         return formatter
     }()
 
-    static let time: DateFormatter = {
+    static var time: DateFormatter {
+        timeFormatter(for: currentTimeFormat)
+    }
+
+    static func timeFormatter(for format: TimeFormat) -> DateFormatter {
         let formatter = DateFormatter()
-        formatter.timeStyle = .short
+        switch format {
+        case .hour12:
+            formatter.dateFormat = "h:mm a"
+        case .hour24:
+            formatter.dateFormat = "HH:mm"
+        }
         return formatter
-    }()
+    }
 }
 
 struct BreakDurationFormatter {

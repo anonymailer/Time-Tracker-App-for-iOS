@@ -3,15 +3,32 @@ import SwiftUI
 import Combine
 
 class ExportProfilesViewModel: ObservableObject {
-    @Published var exportSettings = ExportProfile(
+    var onChange: (() -> Void)?
+
+    @Published var exportSettings: ExportProfile {
+        didSet {
+            onChange?()
+        }
+    }
+
+    init(exportSettings: ExportProfile = ExportProfile(
         name: "Export Settings",
+        personName: "",
+        firmName: "",
+        reportPeriodTitle: nil,
         selectedColumns: [.day, .timings, .hours, .payout, .notes],
         includeMonthlyTotal: true,
         dateRange: .currentMonth,
         formats: ExportFormat.allCases,
         timeFormatOverride: .hour24,
         currencyOverride: nil
-    )
+    )) {
+        self.exportSettings = exportSettings
+    }
+
+    func apply(exportSettings: ExportProfile) {
+        self.exportSettings = exportSettings
+    }
 
     func saveExportSettings(_ settings: ExportProfile) {
         exportSettings = settings

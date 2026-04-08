@@ -10,6 +10,8 @@ struct ExportProfileEditView: View {
     @State private var customStartDate: Date = Date()
     @State private var customEndDate: Date = Date()
     @State private var timeFormatOverride: TimeFormat = .hour24
+    @State private var personName: String = ""
+    @State private var firmName: String = ""
 
     var body: some View {
         NavigationView {
@@ -23,9 +25,7 @@ struct ExportProfileEditView: View {
 
                 Section(header: Text("Date Range")) {
                     Picker("Date Range", selection: $dateRangeSelection) {
-                        Text("Current Month").tag(ExportRangeSelection.currentMonth)
-                        Text("Previous Month").tag(ExportRangeSelection.previousMonth)
-                        Text("Next Month").tag(ExportRangeSelection.nextMonth)
+                        Text("Current Report").tag(ExportRangeSelection.currentMonth)
                         Text("Custom").tag(ExportRangeSelection.custom)
                     }
 
@@ -33,6 +33,11 @@ struct ExportProfileEditView: View {
                         DatePicker("From", selection: $customStartDate, displayedComponents: .date)
                         DatePicker("To", selection: $customEndDate, displayedComponents: .date)
                     }
+                }
+
+                Section(header: Text("Report Headings")) {
+                    TextField("Your Name", text: $personName)
+                    TextField("Firm Name", text: $firmName)
                 }
 
                 Section {
@@ -51,6 +56,9 @@ struct ExportProfileEditView: View {
                         exportVM.saveExportSettings(
                             ExportProfile(
                                 name: "Export Settings",
+                                personName: personName,
+                                firmName: firmName,
+                                reportPeriodTitle: nil,
                                 selectedColumns: selectedColumns,
                                 includeMonthlyTotal: includeMonthlyTotal,
                                 dateRange: resolvedDateRange,
@@ -74,10 +82,6 @@ struct ExportProfileEditView: View {
         switch dateRangeSelection {
         case .currentMonth:
             return .currentMonth
-        case .previousMonth:
-            return .previousMonth
-        case .nextMonth:
-            return .nextMonth
         case .custom:
             return .custom(start: customStartDate, end: customEndDate)
         }
@@ -85,6 +89,8 @@ struct ExportProfileEditView: View {
 
     private func populateForm() {
         let settings = exportVM.exportSettings
+        personName = settings.personName
+        firmName = settings.firmName
         selectedColumns = normalizedColumns(from: settings.selectedColumns)
         includeMonthlyTotal = settings.includeMonthlyTotal
         timeFormatOverride = settings.timeFormatOverride ?? .hour24
@@ -93,9 +99,9 @@ struct ExportProfileEditView: View {
         case .currentMonth:
             dateRangeSelection = .currentMonth
         case .previousMonth:
-            dateRangeSelection = .previousMonth
+            dateRangeSelection = .currentMonth
         case .nextMonth:
-            dateRangeSelection = .nextMonth
+            dateRangeSelection = .currentMonth
         case let .custom(start, end):
             dateRangeSelection = .custom
             customStartDate = start
@@ -132,7 +138,5 @@ struct ExportProfileEditView: View {
 
 private enum ExportRangeSelection: Hashable {
     case currentMonth
-    case previousMonth
-    case nextMonth
     case custom
 }

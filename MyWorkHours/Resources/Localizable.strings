@@ -44,6 +44,10 @@
 "Columns" = "Columns";
 "Formats" = "Formats";
 "Date Range" = "Date Range";
+"Current Report" = "Current Report";
+"Report Headings" = "Report Headings";
+"Your Name" = "Your Name";
+"Firm Name" = "Firm Name";
 "Include Monthly Total" = "Include Monthly Total";
 "Time Format" = "Time Format";
 "Currency Override" = "Currency Override";
