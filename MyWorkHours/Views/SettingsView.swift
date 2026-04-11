@@ -35,6 +35,14 @@ struct SettingsView: View {
                     .pickerStyle(SegmentedPickerStyle())
                 }
 
+                Section(header: Text("Week Start")) {
+                    Picker("Week Starts On", selection: $settings.weekStartDay) {
+                        Text("Sunday").tag(WeekStartDay.sunday)
+                        Text("Monday").tag(WeekStartDay.monday)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+
                 Section(header: Text("Currency")) {
                     TextField("Currency symbol/code", text: $settings.currencyCode)
                 }

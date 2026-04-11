@@ -18,7 +18,11 @@ struct ReportsView: View {
     @State private var exportURL: URL?
     @State private var showShareSheet = false
 
-    private let calendar = Calendar.current
+    private var calendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = settings.weekStartDay.firstWeekday
+        return calendar
+    }
 
     var body: some View {
         NavigationView {
@@ -59,6 +63,7 @@ struct ReportsView: View {
                                 Spacer().frame(width: 12)
                                 Text(row.entry?.notes ?? "").frame(width: notesColumnWidth, alignment: .leading)
                             }
+                            .foregroundColor(isWeekend(row.date) ? .red : .primary)
                             .padding(.horizontal)
                             .padding(.vertical, 4)
                             Divider()
@@ -77,7 +82,7 @@ struct ReportsView: View {
                     }
                 }
             }
-            .id(settings.timeFormat)
+            .id("\(settings.timeFormat.rawValue)-\(settings.weekStartDay.rawValue)")
             .navigationTitle("Reports")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -107,7 +112,7 @@ struct ReportsView: View {
                 }
             }
         }
-        .id(settings.timeFormat)
+        .id("\(settings.timeFormat.rawValue)-\(settings.weekStartDay.rawValue)")
     }
 
     private var reportHeader: some View {
@@ -178,6 +183,10 @@ struct ReportsView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd-MM-yyyy  EEEE"
         return formatter.string(from: date)
+    }
+
+    func isWeekend(_ date: Date) -> Bool {
+        Calendar.current.isDateInWeekend(date)
     }
 
     func timeString(_ date: Date) -> String {

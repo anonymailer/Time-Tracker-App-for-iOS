@@ -9,6 +9,9 @@ struct ContentView: View {
             CalendarView()
                 .tabItem { Label("Calendar", systemImage: "calendar") }
 
+            OverviewView()
+                .tabItem { Label("Overview", systemImage: "chart.bar.doc.horizontal") }
+
             ReportsView()
                 .tabItem { Label("Reports", systemImage: "doc.plaintext") }
 
@@ -18,6 +21,6 @@ struct ContentView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
-        .id(settings.timeFormat)
+        .id("\(settings.timeFormat.rawValue)-\(settings.weekStartDay.rawValue)")
     }
 }

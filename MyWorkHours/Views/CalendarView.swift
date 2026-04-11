@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct CalendarView: View {
     @EnvironmentObject var calendarVM: CalendarViewModel
@@ -10,28 +9,20 @@ struct CalendarView: View {
     @State private var selectedDates: [Date] = []
     @State private var isSelectingMultipleDates = false
     @State private var showEntrySheet = false
-    @State private var countdownOpacity = 1.0
 
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {
                 VStack(spacing: 12) {
-                    Text(daysCompletedText)
-                        .font(.system(size: 34, weight: .heavy, design: .rounded))
-                        .foregroundColor(.red)
-                        .opacity(shouldBlinkCountdown ? countdownOpacity : 1)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                        .padding(.top, -10)
-
                     CalendarPickerView(
                         selectedDate: $selectedDate,
                         selectedDates: $selectedDates,
                         isSelectingMultipleDates: $isSelectingMultipleDates,
-                        entryDates: calendarVM.entries.map(\.date)
+                        entries: calendarVM.entries,
+                        timeFormat: settings.timeFormat,
+                        weekStartDay: settings.weekStartDay
                     )
-                    .frame(height: 420)
+                    .frame(height: 470)
                     .padding(.horizontal)
 
                     if isSelectingMultipleDates {
@@ -69,12 +60,6 @@ struct CalendarView: View {
                 DayEntrySheetView(dates: entryDates)
                     .environmentObject(calendarVM)
                     .environmentObject(templatesVM)
-            }
-            .onAppear {
-                updateCountdownBlinking()
-            }
-            .onChange(of: daysLeft) { _, _ in
-                updateCountdownBlinking()
             }
             .safeAreaInset(edge: .bottom) {
                 selectedEntryDetails
@@ -132,204 +117,222 @@ struct CalendarView: View {
     private func timeString(_ date: Date) -> String {
         DateFormatterHelper.timeFormatter(for: settings.timeFormat).string(from: date)
     }
-
-    private var daysCompletedText: String {
-        return "\(daysLeft) Days Left"
-    }
-
-    private var daysLeft: Int {
-        let completedDays = Calendar.current.dateComponents(
-            [.day],
-            from: Calendar.current.startOfDay(for: settings.installationDate),
-            to: Calendar.current.startOfDay(for: Date())
-        ).day ?? 0
-        return max(6 - completedDays, 0)
-    }
-
-    private var shouldBlinkCountdown: Bool {
-        daysLeft <= 1
-    }
-
-    private func updateCountdownBlinking() {
-        if shouldBlinkCountdown {
-            countdownOpacity = 1
-            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                countdownOpacity = 0.2
-            }
-        } else {
-            countdownOpacity = 1
-        }
-    }
 }
 
-private struct CalendarPickerView: UIViewRepresentable {
+private struct CalendarPickerView: View {
     @Binding var selectedDate: Date
     @Binding var selectedDates: [Date]
     @Binding var isSelectingMultipleDates: Bool
 
-    let entryDates: [Date]
+    let entries: [WorkDay]
+    let timeFormat: TimeFormat
+    let weekStartDay: WeekStartDay
+    @State private var displayedMonth: Date = Date()
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+    private var configuredCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = weekStartDay.firstWeekday
+        return calendar
     }
 
-    func makeUIView(context: Context) -> UICalendarView {
-        let calendarView = UICalendarView()
-        calendarView.calendar = Calendar.current
-        calendarView.locale = .current
-        calendarView.fontDesign = .rounded
-        calendarView.delegate = context.coordinator
-        calendarView.tintColor = .systemBlue
-        context.coordinator.configureSelectionBehavior(for: calendarView)
-        context.coordinator.applyCalendarStyling(to: calendarView)
-        return calendarView
-    }
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(monthYearString)
+                .font(.title3.weight(.semibold))
 
-    func updateUIView(_ uiView: UICalendarView, context: Context) {
-        context.coordinator.parent = self
-        uiView.delegate = context.coordinator
-        context.coordinator.configureSelectionBehavior(for: uiView)
-        context.coordinator.applyCalendarStyling(to: uiView)
-
-        let visibleDate = isSelectingMultipleDates ? (selectedDates.first ?? selectedDate) : selectedDate
-        uiView.setVisibleDateComponents(dateComponents(for: visibleDate), animated: false)
-
-        if let singleSelection = uiView.selectionBehavior as? UICalendarSelectionSingleDate {
-            singleSelection.setSelected(dateComponents(for: selectedDate), animated: false)
-        }
-
-        if let multiSelection = uiView.selectionBehavior as? UICalendarSelectionMultiDate {
-            multiSelection.setSelectedDates(selectedDates.map(dateComponents(for:)), animated: false)
-        }
-
-        let reloadedComponents = Array(
-            Set(context.coordinator.decoratedDateComponents + entryDates.map(dateComponents(for:)))
-        )
-        context.coordinator.decoratedDateComponents = entryDates.map(dateComponents(for:))
-        uiView.reloadDecorations(forDateComponents: reloadedComponents, animated: false)
-    }
-
-    private func dateComponents(for date: Date) -> DateComponents {
-        Calendar.current.dateComponents([.calendar, .year, .month, .day], from: Calendar.current.startOfDay(for: date))
-    }
-
-    final class Coordinator: NSObject, UICalendarViewDelegate, UICalendarSelectionSingleDateDelegate, UICalendarSelectionMultiDateDelegate {
-        var parent: CalendarPickerView
-        var decoratedDateComponents: [DateComponents] = []
-        weak var calendarView: UICalendarView?
-
-        init(_ parent: CalendarPickerView) {
-            self.parent = parent
-        }
-
-        func configureSelectionBehavior(for calendarView: UICalendarView) {
-            self.calendarView = calendarView
-            if parent.isSelectingMultipleDates {
-                if !(calendarView.selectionBehavior is UICalendarSelectionMultiDate) {
-                    calendarView.selectionBehavior = UICalendarSelectionMultiDate(delegate: self)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 7), spacing: 14) {
+                ForEach(weekdaySymbols, id: \.self) { symbol in
+                    Text(symbol)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(weekdayHeaderColor(for: symbol))
+                        .frame(maxWidth: .infinity)
                 }
-            } else {
-                if !(calendarView.selectionBehavior is UICalendarSelectionSingleDate) {
-                    calendarView.selectionBehavior = UICalendarSelectionSingleDate(delegate: self)
-                }
-            }
-        }
 
-        func applyCalendarStyling(to calendarView: UICalendarView) {
-            updateSelectionAppearance(in: calendarView)
-        }
+                ForEach(monthCells) { cell in
+                    switch cell.kind {
+                    case .empty:
+                        Color.clear
+                            .frame(height: 52)
+                    case let .day(date):
+                        Button {
+                            select(date)
+                        } label: {
+                            VStack(spacing: 6) {
+                                Text(dayNumberString(for: date))
+                                    .font(.title3.weight(.semibold))
+                                    .frame(width: 40, height: 40)
+                                    .background(
+                                        Circle()
+                                            .fill(isSelected(date) ? Color.blue : Color.clear)
+                                    )
+                                    .foregroundColor(dayTextColor(for: date))
 
-        func dateSelection(_ selection: UICalendarSelectionSingleDate, didSelectDate dateComponents: DateComponents?) {
-            guard let dateComponents, let date = Calendar.current.date(from: dateComponents) else { return }
-            parent.selectedDate = Calendar.current.startOfDay(for: date)
-            if let calendarView {
-                updateSelectionAppearance(in: calendarView)
-            }
-        }
-
-        func multiDateSelection(_ selection: UICalendarSelectionMultiDate, didSelectDate dateComponents: DateComponents) {
-            guard let date = Calendar.current.date(from: dateComponents) else { return }
-            let normalized = Calendar.current.startOfDay(for: date)
-            if !parent.selectedDates.contains(where: { Calendar.current.isDate($0, inSameDayAs: normalized) }) {
-                parent.selectedDates.append(normalized)
-                parent.selectedDates.sort()
-            }
-            parent.selectedDate = normalized
-            if let calendarView {
-                updateSelectionAppearance(in: calendarView)
-            }
-        }
-
-        func multiDateSelection(_ selection: UICalendarSelectionMultiDate, didDeselectDate dateComponents: DateComponents) {
-            guard let date = Calendar.current.date(from: dateComponents) else { return }
-            let normalized = Calendar.current.startOfDay(for: date)
-            parent.selectedDates.removeAll { Calendar.current.isDate($0, inSameDayAs: normalized) }
-            if let calendarView {
-                updateSelectionAppearance(in: calendarView)
-            }
-        }
-
-        func multiDateSelection(_ selection: UICalendarSelectionMultiDate, canDeselectDate dateComponents: DateComponents) -> Bool {
-            true
-        }
-
-        func calendarView(_ calendarView: UICalendarView, decorationFor dateComponents: DateComponents) -> UICalendarView.Decoration? {
-            guard let date = Calendar.current.date(from: dateComponents) else { return nil }
-            let normalized = Calendar.current.startOfDay(for: date)
-            let hasEntry = parent.entryDates.contains { Calendar.current.isDate($0, inSameDayAs: normalized) }
-            guard hasEntry else { return nil }
-            return .default(color: .systemOrange, size: .small)
-        }
-
-        private func updateSelectionAppearance(in calendarView: UICalendarView) {
-            DispatchQueue.main.async {
-                self.hideMonthNavigationButtons(in: calendarView)
-                self.applySelectionAppearanceRecursively(to: calendarView)
-            }
-        }
-
-        private func hideMonthNavigationButtons(in view: UIView) {
-            let className = String(describing: type(of: view))
-
-            if className == "_UICalendarHeaderView" {
-                let headerButtons = view.subviews.compactMap { $0 as? UIButton }
-                for button in headerButtons where String(describing: type(of: button)) != "_UICalendarHeaderTitleButton" {
-                    button.isHidden = true
-                    button.isUserInteractionEnabled = false
-                    button.alpha = 0
-                }
-            }
-
-            for subview in view.subviews {
-                hideMonthNavigationButtons(in: subview)
-            }
-        }
-
-        private func applySelectionAppearanceRecursively(to view: UIView) {
-            for subview in view.subviews {
-                if let button = subview as? UIButton {
-                    if button.isSelected {
-                        button.backgroundColor = .systemBlue
-                        button.tintColor = .white
-                        button.setTitleColor(.white, for: .selected)
-                        button.setTitleColor(.white, for: .normal)
-                        button.layer.borderWidth = 0
-                        button.layer.borderColor = nil
-                    } else if button.currentImage == nil {
-                        button.backgroundColor = .clear
-                        button.tintColor = .systemBlue
-                        button.setTitleColor(.systemBlue, for: .normal)
+                                if let timingText = entryTimingText(for: date) {
+                                    Text(timingText)
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(isSelected(date) ? .white.opacity(0.95) : .secondary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.55)
+                                        .frame(maxWidth: .infinity)
+                                } else {
+                                    Color.clear
+                                        .frame(height: 10)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-
-                if let label = subview as? UILabel,
-                   let superview = label.superview as? UIButton,
-                   superview.isSelected {
-                    label.textColor = .white
-                }
-
-                applySelectionAppearanceRecursively(to: subview)
             }
         }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    if value.translation.width < -40 {
+                        moveMonth(by: 1)
+                    } else if value.translation.width > 40 {
+                        moveMonth(by: -1)
+                    }
+                }
+        )
+        .onAppear {
+            displayedMonth = monthStart(for: isSelectingMultipleDates ? (selectedDates.first ?? selectedDate) : selectedDate)
+        }
+        .onChange(of: selectedDate) { _, newValue in
+            if !isSelectingMultipleDates {
+                displayedMonth = monthStart(for: newValue)
+            }
+        }
+        .onChange(of: isSelectingMultipleDates) { _, isSelecting in
+            displayedMonth = monthStart(for: isSelecting ? (selectedDates.first ?? selectedDate) : selectedDate)
+        }
+        .onChange(of: weekStartDay) { _, _ in
+            displayedMonth = monthStart(for: displayedMonth)
+        }
     }
+
+    private var monthYearString: String {
+        let formatter = DateFormatter()
+        formatter.calendar = configuredCalendar
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: displayedMonth)
+    }
+
+    private var weekdaySymbols: [String] {
+        let formatter = DateFormatter()
+        formatter.calendar = configuredCalendar
+        let symbols = formatter.shortStandaloneWeekdaySymbols ?? formatter.shortWeekdaySymbols ?? []
+        let shift = max(configuredCalendar.firstWeekday - 1, 0)
+        guard !symbols.isEmpty else { return [] }
+        return Array(symbols[shift...] + symbols[..<shift])
+    }
+
+    private var monthCells: [CalendarDayCell] {
+        guard
+            let monthInterval = configuredCalendar.dateInterval(of: .month, for: displayedMonth),
+            let dayRange = configuredCalendar.range(of: .day, in: .month, for: displayedMonth)
+        else {
+            return []
+        }
+
+        let firstDay = monthInterval.start
+        let weekday = configuredCalendar.component(.weekday, from: firstDay)
+        let leadingPadding = (weekday - configuredCalendar.firstWeekday + 7) % 7
+
+        var cells = Array(repeating: CalendarDayCell(kind: .empty), count: leadingPadding)
+        cells.append(contentsOf: dayRange.compactMap { day -> CalendarDayCell? in
+            configuredCalendar.date(byAdding: .day, value: day - 1, to: firstDay).map { CalendarDayCell(kind: .day($0)) }
+        })
+
+        let trailingPadding = (7 - (cells.count % 7)) % 7
+        cells.append(contentsOf: Array(repeating: CalendarDayCell(kind: .empty), count: trailingPadding))
+        return cells
+    }
+
+    private func moveMonth(by value: Int) {
+        if let updated = configuredCalendar.date(byAdding: .month, value: value, to: displayedMonth) {
+            displayedMonth = monthStart(for: updated)
+        }
+    }
+
+    private func select(_ date: Date) {
+        let normalized = configuredCalendar.startOfDay(for: date)
+        selectedDate = normalized
+
+        if isSelectingMultipleDates {
+            if let existingIndex = selectedDates.firstIndex(where: { configuredCalendar.isDate($0, inSameDayAs: normalized) }) {
+                selectedDates.remove(at: existingIndex)
+            } else {
+                selectedDates.append(normalized)
+                selectedDates.sort()
+            }
+        } else {
+            displayedMonth = monthStart(for: normalized)
+        }
+    }
+
+    private func isSelected(_ date: Date) -> Bool {
+        if isSelectingMultipleDates {
+            return selectedDates.contains { configuredCalendar.isDate($0, inSameDayAs: date) }
+        }
+        return configuredCalendar.isDate(selectedDate, inSameDayAs: date)
+    }
+
+    private func entry(for date: Date) -> WorkDay? {
+        entries.first { configuredCalendar.isDate($0.date, inSameDayAs: date) }
+    }
+
+    private func entryTimingText(for date: Date) -> String? {
+        guard let entry = entry(for: date) else { return nil }
+        guard entry.hasWorkingTime else { return "Leave" }
+        return "\(timeString(entry.fromTime))-\(timeString(entry.toTime))"
+    }
+
+    private func dayNumberString(for date: Date) -> String {
+        String(configuredCalendar.component(.day, from: date))
+    }
+
+    private func dayTextColor(for date: Date) -> Color {
+        if isSelected(date) {
+            return .white
+        }
+        return configuredCalendar.isDateInWeekend(date) ? .red : .blue
+    }
+
+    private func weekdayHeaderColor(for symbol: String) -> Color {
+        guard let weekdayIndex = weekdaySymbols.firstIndex(of: symbol) else {
+            return .secondary
+        }
+        let weekday = ((configuredCalendar.firstWeekday - 1 + weekdayIndex) % 7) + 1
+        return weekday == 1 || weekday == 7 ? .red : .secondary
+    }
+
+    private func monthStart(for date: Date) -> Date {
+        configuredCalendar.date(from: configuredCalendar.dateComponents([.year, .month], from: date)) ?? date
+    }
+
+    private func timeString(_ date: Date) -> String {
+        let components = configuredCalendar.dateComponents([.hour, .minute], from: date)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+
+        switch timeFormat {
+        case .hour24:
+            return String(format: "%02d:%02d", hour, minute)
+        case .hour12:
+            return DateFormatterHelper.timeFormatter(for: .hour12).string(from: date)
+        }
+    }
+}
+
+private struct CalendarDayCell: Identifiable {
+    enum Kind {
+        case empty
+        case day(Date)
+    }
+
+    let id = UUID()
+    let kind: Kind
 }

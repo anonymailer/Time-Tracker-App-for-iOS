@@ -91,14 +91,6 @@ struct DayEntrySheetView: View {
                                 Text(template.name).tag(Optional(template.id))
                             }
                         }
-
-                        Button("Apply Selected Template") {
-                            guard let selectedTemplate else { return }
-                            focusedField = nil
-                            calendarVM.applyTemplate(selectedTemplate, for: dates)
-                            dismiss()
-                        }
-                        .disabled(selectedTemplate == nil)
                     } else {
                         Text("No templates available")
                             .foregroundColor(.secondary)

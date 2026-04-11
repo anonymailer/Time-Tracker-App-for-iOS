@@ -14,6 +14,20 @@ enum AppTheme: String, CaseIterable, Codable {
     }
 }
 
+enum WeekStartDay: String, CaseIterable, Codable {
+    case sunday
+    case monday
+
+    var firstWeekday: Int {
+        switch self {
+        case .sunday:
+            return 1
+        case .monday:
+            return 2
+        }
+    }
+}
+
 class SettingsViewModel: ObservableObject {
     var onChange: (() -> Void)?
 
@@ -30,6 +44,11 @@ class SettingsViewModel: ObservableObject {
     @Published var timeFormat: TimeFormat = .hour24 {
         didSet {
             DateFormatterHelper.currentTimeFormat = timeFormat
+            onChange?()
+        }
+    }
+    @Published var weekStartDay: WeekStartDay = .sunday {
+        didSet {
             onChange?()
         }
     }
@@ -79,6 +98,7 @@ class SettingsViewModel: ObservableObject {
         appTheme = state.appTheme
         currencyCode = state.currencyCode
         timeFormat = state.timeFormat
+        weekStartDay = state.weekStartDay
         languageCode = state.languageCode
         autoBackupEnabled = state.autoBackupEnabled
         autoBackupFolderName = state.autoBackupFolderName
@@ -95,6 +115,7 @@ class SettingsViewModel: ObservableObject {
         appTheme = state.appTheme
         currencyCode = state.currencyCode
         timeFormat = state.timeFormat
+        weekStartDay = state.weekStartDay
         languageCode = state.languageCode
         autoBackupEnabled = state.autoBackupEnabled
         autoBackupFolderName = state.autoBackupFolderName
@@ -106,19 +127,20 @@ class SettingsViewModel: ObservableObject {
     }
 
     var state: SettingsState {
-        SettingsState(
-            appTheme: appTheme,
-            currencyCode: currencyCode,
-            timeFormat: timeFormat,
-            languageCode: languageCode,
-            autoBackupEnabled: autoBackupEnabled,
-            autoBackupFolderName: autoBackupFolderName,
-            autoBackupFolderBookmark: autoBackupFolderBookmark,
-            lastAutoBackupAt: lastAutoBackupAt,
-            autoBackupConfiguredAt: autoBackupConfiguredAt,
-            installationDate: installationDate,
-            installationBuildIdentifier: installationBuildIdentifier
-        )
+        var state = SettingsState()
+        state.appTheme = appTheme
+        state.currencyCode = currencyCode
+        state.timeFormat = timeFormat
+        state.weekStartDay = weekStartDay
+        state.languageCode = languageCode
+        state.autoBackupEnabled = autoBackupEnabled
+        state.autoBackupFolderName = autoBackupFolderName
+        state.autoBackupFolderBookmark = autoBackupFolderBookmark
+        state.lastAutoBackupAt = lastAutoBackupAt
+        state.autoBackupConfiguredAt = autoBackupConfiguredAt
+        state.installationDate = installationDate
+        state.installationBuildIdentifier = installationBuildIdentifier
+        return state
     }
 
     func resetInstallationTimer(buildIdentifier: String, date: Date = Date()) {
@@ -131,6 +153,7 @@ struct SettingsState: Codable {
     var appTheme: AppTheme = .system
     var currencyCode: String = "$"
     var timeFormat: TimeFormat = .hour24
+    var weekStartDay: WeekStartDay = .sunday
     var languageCode: String = "en"
     var autoBackupEnabled: Bool = false
     var autoBackupFolderName: String? = nil
@@ -139,4 +162,37 @@ struct SettingsState: Codable {
     var autoBackupConfiguredAt: Date? = nil
     var installationDate: Date? = nil
     var installationBuildIdentifier: String? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case appTheme
+        case currencyCode
+        case timeFormat
+        case weekStartDay
+        case languageCode
+        case autoBackupEnabled
+        case autoBackupFolderName
+        case autoBackupFolderBookmark
+        case lastAutoBackupAt
+        case autoBackupConfiguredAt
+        case installationDate
+        case installationBuildIdentifier
+    }
+
+    init() { }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        appTheme = try container.decodeIfPresent(AppTheme.self, forKey: .appTheme) ?? .system
+        currencyCode = try container.decodeIfPresent(String.self, forKey: .currencyCode) ?? "$"
+        timeFormat = try container.decodeIfPresent(TimeFormat.self, forKey: .timeFormat) ?? .hour24
+        weekStartDay = try container.decodeIfPresent(WeekStartDay.self, forKey: .weekStartDay) ?? .sunday
+        languageCode = try container.decodeIfPresent(String.self, forKey: .languageCode) ?? "en"
+        autoBackupEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoBackupEnabled) ?? false
+        autoBackupFolderName = try container.decodeIfPresent(String.self, forKey: .autoBackupFolderName)
+        autoBackupFolderBookmark = try container.decodeIfPresent(Data.self, forKey: .autoBackupFolderBookmark)
+        lastAutoBackupAt = try container.decodeIfPresent(Date.self, forKey: .lastAutoBackupAt)
+        autoBackupConfiguredAt = try container.decodeIfPresent(Date.self, forKey: .autoBackupConfiguredAt)
+        installationDate = try container.decodeIfPresent(Date.self, forKey: .installationDate)
+        installationBuildIdentifier = try container.decodeIfPresent(String.self, forKey: .installationBuildIdentifier)
+    }
 }
