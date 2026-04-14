@@ -36,7 +36,7 @@ class SettingsViewModel: ObservableObject {
             onChange?()
         }
     }
-    @Published var currencyCode: String = "$" {
+    @Published var currencyCode: String = "" {
         didSet {
             onChange?()
         }
@@ -95,11 +95,11 @@ class SettingsViewModel: ObservableObject {
 
     init(state: SettingsState = .init()) {
         let resolvedInstallationDate = state.installationDate ?? Date()
-        appTheme = state.appTheme
-        currencyCode = state.currencyCode
+        appTheme = .system
+        currencyCode = ""
         timeFormat = state.timeFormat
-        weekStartDay = state.weekStartDay
-        languageCode = state.languageCode
+        weekStartDay = .sunday
+        languageCode = "en"
         autoBackupEnabled = state.autoBackupEnabled
         autoBackupFolderName = state.autoBackupFolderName
         autoBackupFolderBookmark = state.autoBackupFolderBookmark
@@ -112,11 +112,11 @@ class SettingsViewModel: ObservableObject {
 
     func apply(state: SettingsState) {
         let resolvedInstallationDate = state.installationDate ?? installationDate
-        appTheme = state.appTheme
-        currencyCode = state.currencyCode
+        appTheme = .system
+        currencyCode = ""
         timeFormat = state.timeFormat
-        weekStartDay = state.weekStartDay
-        languageCode = state.languageCode
+        weekStartDay = .sunday
+        languageCode = "en"
         autoBackupEnabled = state.autoBackupEnabled
         autoBackupFolderName = state.autoBackupFolderName
         autoBackupFolderBookmark = state.autoBackupFolderBookmark
@@ -151,7 +151,7 @@ class SettingsViewModel: ObservableObject {
 
 struct SettingsState: Codable {
     var appTheme: AppTheme = .system
-    var currencyCode: String = "$"
+    var currencyCode: String = ""
     var timeFormat: TimeFormat = .hour24
     var weekStartDay: WeekStartDay = .sunday
     var languageCode: String = "en"
@@ -182,11 +182,11 @@ struct SettingsState: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        appTheme = try container.decodeIfPresent(AppTheme.self, forKey: .appTheme) ?? .system
-        currencyCode = try container.decodeIfPresent(String.self, forKey: .currencyCode) ?? "$"
+        appTheme = .system
+        currencyCode = ""
         timeFormat = try container.decodeIfPresent(TimeFormat.self, forKey: .timeFormat) ?? .hour24
-        weekStartDay = try container.decodeIfPresent(WeekStartDay.self, forKey: .weekStartDay) ?? .sunday
-        languageCode = try container.decodeIfPresent(String.self, forKey: .languageCode) ?? "en"
+        weekStartDay = .sunday
+        languageCode = "en"
         autoBackupEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoBackupEnabled) ?? false
         autoBackupFolderName = try container.decodeIfPresent(String.self, forKey: .autoBackupFolderName)
         autoBackupFolderBookmark = try container.decodeIfPresent(Data.self, forKey: .autoBackupFolderBookmark)

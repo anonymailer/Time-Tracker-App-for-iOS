@@ -14,8 +14,10 @@ struct DayEntrySheetView: View {
     @State private var breakMinutes: Int = 0
     @State private var hourlyRate: String = ""
     @State private var notes: String = ""
-    @State private var selectedTemplateID: WorkTemplate.ID?
+    @State private var showingCustomEditor = false
     @State private var showingDeleteConfirmation = false
+    @State private var showingTemplateApplyConfirmation = false
+    @State private var pendingTemplate: WorkTemplate?
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -26,93 +28,121 @@ struct DayEntrySheetView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Times")) {
-                    HStack {
-                        Text("From")
-                        Spacer()
-                        DatePicker("", selection: $fromTime, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
-                            .datePickerStyle(.compact)
-                            .environment(\.locale, timePickerLocale)
-                            .id("from-\(timePickerLocale.identifier)")
-                    }
-                    HStack {
-                        Text("To")
-                        Spacer()
-                        DatePicker("", selection: $toTime, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
-                            .datePickerStyle(.compact)
-                            .environment(\.locale, timePickerLocale)
-                            .id("to-\(timePickerLocale.identifier)")
-                    }
-                    HStack {
-                        Text("Break Time")
-                        Spacer()
-                        HStack(spacing: 0) {
-                            Picker("Hours", selection: $breakHours) {
-                                ForEach(0..<24, id: \.self) { hour in
-                                    Text(String(format: "%02d", hour)).tag(hour)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 72, height: 100)
-                            .clipped()
-
-                            Text(":")
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 4)
-
-                            Picker("Minutes", selection: $breakMinutes) {
-                                ForEach(0..<60, id: \.self) { minute in
-                                    Text(String(format: "%02d", minute)).tag(minute)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 72, height: 100)
-                            .clipped()
-                        }
-                    }
-                    TextField("Hourly Rate", text: $hourlyRate)
-                        .keyboardType(.decimalPad)
-                        .focused($focusedField, equals: .hourlyRate)
-                }
-
-                Section(header: Text("Notes")) {
-                    TextEditor(text: $notes)
-                        .frame(height: 80)
-                        .focused($focusedField, equals: .notes)
-                }
-
                 Section(header: Text("Templates")) {
                     if !templatesVM.templates.isEmpty {
-                        Picker("Select Template", selection: $selectedTemplateID) {
-                            Text("Choose Template").tag(nil as WorkTemplate.ID?)
-                            ForEach(templatesVM.templates) { template in
-                                Text(template.name).tag(Optional(template.id))
+                        ForEach(templatesVM.templates) { template in
+                            Button {
+                                focusedField = nil
+                                pendingTemplate = template
+                                showingTemplateApplyConfirmation = true
+                            } label: {
+                                HStack {
+                                    Text(template.name)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Text(templateTimingSummary(template))
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                     } else {
                         Text("No templates available")
                             .foregroundColor(.secondary)
                     }
-                }
 
-                Section {
-                    Button("Save") {
-                        focusedField = nil
-                        calendarVM.saveEntries(
-                            for: dates,
-                            from: fromTime,
-                            to: toTime,
-                            hourlyRate: hourlyRate,
-                            notes: notes,
-                            breakMinutes: (breakHours * 60) + breakMinutes,
-                            templateID: selectedTemplateID
-                        )
-                        dismiss()
+                    Button {
+                        showingCustomEditor.toggle()
+                    } label: {
+                        HStack {
+                            Text("Custom")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: showingCustomEditor ? "chevron.up" : "chevron.down")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
 
+                if showingCustomEditor {
+                    Section(header: Text("Custom")) {
+                        HStack {
+                            Text("From")
+                            Spacer()
+                            DatePicker("", selection: $fromTime, displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                                .datePickerStyle(.compact)
+                                .environment(\.locale, timePickerLocale)
+                                .id("from-\(timePickerLocale.identifier)")
+                        }
+
+                        HStack {
+                            Text("To")
+                            Spacer()
+                            DatePicker("", selection: $toTime, displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                                .datePickerStyle(.compact)
+                                .environment(\.locale, timePickerLocale)
+                                .id("to-\(timePickerLocale.identifier)")
+                        }
+
+                        HStack {
+                            Text("Break Time")
+                            Spacer()
+                            HStack(spacing: 0) {
+                                Picker("Hours", selection: $breakHours) {
+                                    ForEach(0..<24, id: \.self) { hour in
+                                        Text(String(format: "%02d", hour)).tag(hour)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 72, height: 100)
+                                .clipped()
+
+                                Text(":")
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 4)
+
+                                Picker("Minutes", selection: $breakMinutes) {
+                                    ForEach(0..<60, id: \.self) { minute in
+                                        Text(String(format: "%02d", minute)).tag(minute)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 72, height: 100)
+                                .clipped()
+                            }
+                        }
+
+                        TextField("Hourly Rate", text: $hourlyRate)
+                            .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .hourlyRate)
+
+                        TextEditor(text: $notes)
+                            .frame(height: 80)
+                            .focused($focusedField, equals: .notes)
+                    }
+
+                    Section {
+                        HStack {
+                            Spacer()
+                            Button("Save") {
+                                focusedField = nil
+                                calendarVM.saveEntries(
+                                    for: dates,
+                                    from: fromTime,
+                                    to: toTime,
+                                    hourlyRate: hourlyRate,
+                                    notes: notes,
+                                    breakMinutes: (breakHours * 60) + breakMinutes,
+                                    templateID: nil
+                                )
+                                dismiss()
+                            }
+                            Spacer()
+                        }
+                    }
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(dates.count > 1 ? "Edit Selected Days" : "Edit Day")
@@ -148,9 +178,19 @@ struct DayEntrySheetView: View {
             } message: {
                 Text(deleteConfirmationMessage)
             }
-            .onChange(of: selectedTemplateID) { _, _ in
-                guard let selectedTemplate else { return }
-                applyTemplateToForm(selectedTemplate)
+            .alert(templateConfirmationTitle, isPresented: $showingTemplateApplyConfirmation) {
+                Button("No", role: .cancel) {
+                    pendingTemplate = nil
+                }
+                Button("Yes") {
+                    if let pendingTemplate {
+                        calendarVM.applyTemplate(pendingTemplate, for: dates)
+                    }
+                    pendingTemplate = nil
+                    dismiss()
+                }
+            } message: {
+                Text(templateConfirmationMessage)
             }
             .onAppear {
                 if dates.count == 1, let date = dates.first, let entry = calendarVM.entry(for: date) {
@@ -166,18 +206,8 @@ struct DayEntrySheetView: View {
                     breakHours = components.hours
                     breakMinutes = components.minutes
                 }
-
-                selectedTemplateID = templatesVM.defaultTemplate?.id ?? templatesVM.templates.first?.id
-                if !hasExistingEntries, let selectedTemplate {
-                    applyTemplateToForm(selectedTemplate)
-                }
             }
         }
-    }
-
-    private var selectedTemplate: WorkTemplate? {
-        guard let selectedTemplateID else { return nil }
-        return templatesVM.templates.first { $0.id == selectedTemplateID }
     }
 
     private var hasExistingEntries: Bool {
@@ -196,14 +226,22 @@ struct DayEntrySheetView: View {
             : "This will delete the entry for this day."
     }
 
-    private func applyTemplateToForm(_ template: WorkTemplate) {
-        fromTime = template.fromTime
-        toTime = template.toTime
-        let components = BreakDurationFormatter.components(for: template.breakMinutes)
-        breakHours = components.hours
-        breakMinutes = components.minutes
-        hourlyRate = String(format: "%.2f", template.hourlyRate)
-        notes = template.notes
+    private var templateConfirmationTitle: String {
+        dates.count > 1 ? "Apply Template to Selected Dates?" : "Apply Template to This Date?"
+    }
+
+    private var templateConfirmationMessage: String {
+        dates.count > 1
+            ? "This will apply the selected template to all selected dates."
+            : "This will apply the selected template to this date."
+    }
+
+    private func templateTimingSummary(_ template: WorkTemplate) -> String {
+        "\(timeString(template.fromTime)) - \(timeString(template.toTime))"
+    }
+
+    private func timeString(_ date: Date) -> String {
+        DateFormatterHelper.timeFormatter(for: settings.timeFormat).string(from: date)
     }
 
     private var timePickerLocale: Locale {

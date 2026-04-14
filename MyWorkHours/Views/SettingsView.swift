@@ -9,7 +9,6 @@ struct SettingsView: View {
 
     @State private var showingBackupExporter = false
     @State private var showingBackupImporter = false
-    @State private var showingBackupFolderPicker = false
     @State private var backupDocument = AppDataStore.backupDocument(from: .empty)
     @State private var backupFileName = AppDataStore.fileName()
     @State private var alertMessage = ""
@@ -21,15 +20,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Theme")) {
-                    Picker("App Theme", selection: $settings.appTheme) {
-                        Text("Light").tag(AppTheme.light)
-                        Text("Dark").tag(AppTheme.dark)
-                        Text("System").tag(AppTheme.system)
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-
                 Section(header: Text("Time Format")) {
                     Picker("Time Format", selection: $settings.timeFormat) {
                         Text("12-hour").tag(TimeFormat.hour12)
@@ -38,30 +28,14 @@ struct SettingsView: View {
                     .pickerStyle(SegmentedPickerStyle())
                 }
 
-                Section(header: Text("Week Start")) {
-                    Picker("Week Starts On", selection: $settings.weekStartDay) {
-                        Text("Sunday").tag(WeekStartDay.sunday)
-                        Text("Monday").tag(WeekStartDay.monday)
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-
-                Section(header: Text("Currency")) {
-                    TextField("Currency symbol/code", text: $settings.currencyCode)
-                }
-
-                Section(header: Text("Language")) {
-                    TextField("Language code (e.g., en, es)", text: $settings.languageCode)
-                }
-
                 Section(header: Text("Backup & Restore")) {
-                    Toggle("Auto Backup", isOn: autoBackupBinding)
+                    Text("Automatic backup runs every day at 10:00 PM and saves inside the app backup folder.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
 
-                    if settings.autoBackupEnabled {
-                        Text(settings.autoBackupFolderName ?? "No backup folder selected")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
+                    Text(autoBackupPathText)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
 
                     Button("Create Backup") {
                         backupDocument = AppDataStore.backupDocument(from: currentSnapshot)
@@ -76,12 +50,6 @@ struct SettingsView: View {
                     Text("Importing a backup replaces all saved work entries, templates, export settings, and app settings.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
-
-                    if settings.autoBackupEnabled {
-                        Text("Auto backup runs daily at 10:00 PM and saves into the selected folder.")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
                 }
 
                 Section(header: Text("Data Management")) {
@@ -138,12 +106,6 @@ struct SettingsView: View {
             } message: {
                 Text("This will update the hourly rate for all existing saved entries.")
             }
-            .sheet(isPresented: $showingBackupFolderPicker) {
-                BackupFolderPicker(
-                    onPick: saveBackupFolder,
-                    onCancel: handleFolderPickerCancellation
-                )
-            }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -155,30 +117,6 @@ struct SettingsView: View {
         }
     }
 
-    private var autoBackupBinding: Binding<Bool> {
-        Binding(
-            get: {
-                settings.autoBackupEnabled
-            },
-            set: { isEnabled in
-                if isEnabled {
-                    if settings.autoBackupFolderBookmark == nil {
-                        showingBackupFolderPicker = true
-                    } else {
-                        settings.autoBackupConfiguredAt = Date()
-                        settings.autoBackupEnabled = true
-                    }
-                } else {
-                    settings.autoBackupEnabled = false
-                    settings.autoBackupFolderName = nil
-                    settings.autoBackupFolderBookmark = nil
-                    settings.lastAutoBackupAt = nil
-                    settings.autoBackupConfiguredAt = nil
-                }
-            }
-        )
-    }
-
     private var currentSnapshot: AppDataSnapshot {
         AppDataSnapshot(
             settings: settings.state,
@@ -186,6 +124,11 @@ struct SettingsView: View {
             templates: templatesVM.templates,
             exportSettings: exportProfilesVM.exportSettings
         )
+    }
+
+    private var autoBackupPathText: String {
+        let path = (try? AppDataStore.autoBackupDirectoryURL().path()) ?? "Unavailable"
+        return "Path: \(path)"
     }
 
     private func importBackup(from url: URL) {
@@ -204,36 +147,6 @@ struct SettingsView: View {
         templatesVM.apply(templates: snapshot.templates)
         exportProfilesVM.apply(exportSettings: snapshot.exportSettings)
         AppDataStore.save(snapshot)
-    }
-
-    private func saveBackupFolder(_ url: URL) {
-        showingBackupFolderPicker = false
-
-        do {
-            guard url.startAccessingSecurityScopedResource() else {
-                throw CocoaError(.fileReadNoPermission)
-            }
-            defer {
-                url.stopAccessingSecurityScopedResource()
-            }
-
-            let bookmarkData = try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
-            settings.autoBackupFolderBookmark = bookmarkData
-            settings.autoBackupFolderName = url.lastPathComponent
-            settings.autoBackupConfiguredAt = Date()
-            settings.autoBackupEnabled = true
-        } catch {
-            settings.autoBackupEnabled = false
-            settings.autoBackupFolderName = nil
-            settings.autoBackupFolderBookmark = nil
-            settings.autoBackupConfiguredAt = nil
-            showAlert(message: "Could not save backup folder: \(error.localizedDescription)")
-        }
-    }
-
-    private func handleFolderPickerCancellation() {
-        showingBackupFolderPicker = false
-        settings.autoBackupEnabled = false
     }
 
     private func showAlert(message: String) {

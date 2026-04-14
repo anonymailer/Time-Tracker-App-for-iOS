@@ -92,25 +92,11 @@ enum AppDataStore {
         return AppBackupDocument(data: data)
     }
 
-    static func autoBackup(snapshot: AppDataSnapshot, bookmarkData: Data) throws -> URL {
-        var staleBookmark = false
-        let directoryURL = try URL(
-            resolvingBookmarkData: bookmarkData,
-            options: [],
-            relativeTo: nil,
-            bookmarkDataIsStale: &staleBookmark
-        )
-
-        let shouldStopAccessing = directoryURL.startAccessingSecurityScopedResource()
-        defer {
-            if shouldStopAccessing {
-                directoryURL.stopAccessingSecurityScopedResource()
-            }
-        }
-
+    static func autoBackup(snapshot: AppDataSnapshot) throws -> URL {
+        let directoryURL = try autoBackupDirectoryURL()
         let data = try encoder.encode(backupSnapshot(from: snapshot))
         let fileURL = directoryURL
-            .appendingPathComponent(fileName(), isDirectory: false)
+            .appendingPathComponent(autoBackupFileName, isDirectory: false)
             .appendingPathExtension("json")
 
         var coordinationError: NSError?
@@ -119,7 +105,7 @@ enum AppDataStore {
         NSFileCoordinator().coordinate(writingItemAt: directoryURL, error: &coordinationError) { coordinatedDirectoryURL in
             do {
                 let coordinatedFileURL = coordinatedDirectoryURL
-                    .appendingPathComponent(fileName(), isDirectory: false)
+                    .appendingPathComponent(autoBackupFileName, isDirectory: false)
                     .appendingPathExtension("json")
                 try data.write(to: coordinatedFileURL, options: .atomic)
             } catch {
@@ -138,11 +124,21 @@ enum AppDataStore {
         return fileURL
     }
 
+    static func autoBackupDirectoryURL() throws -> URL {
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let directoryURL = documentsDirectory.appendingPathComponent("AutoBackups", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        return directoryURL
+    }
+
     static func fileName(for date: Date = Date()) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
         return "MyWorkHours-Backup-\(formatter.string(from: date))"
     }
+
+    private static let autoBackupFileName = "MyWorkHours-AutoBackup"
 
     static func nextAutoBackupDate(after date: Date = Date()) -> Date {
         let calendar = Calendar.current

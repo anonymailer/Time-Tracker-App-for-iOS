@@ -323,7 +323,7 @@ class ExportEngine {
         case .hours:
             return entry.totalHoursString
         case .payout:
-            return "\(settings.currencyCode) \(String(format: "%.2f", entry.totalPayout))"
+            return String(format: "%.2f", entry.totalPayout)
         case .notes:
             return entry.notes
         }
@@ -361,7 +361,7 @@ class ExportEngine {
         let totalPayout = entries.reduce(0) { $0 + $1.totalPayout }
         let payoutValue = String(format: "%.2f", totalPayout)
         let workDays = entries.filter(\.hasWorkingTime).count
-        return ("Work Days : \(workDays)", totalHours, "\(settings.currencyCode) \(payoutValue)", payoutValue)
+        return ("Work Days : \(workDays)", totalHours, payoutValue, payoutValue)
     }
 
     private static func minimumWidth(for column: ExportColumn) -> CGFloat {

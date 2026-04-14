@@ -210,7 +210,7 @@ struct ReportsView: View {
         return "\(timeString(entry.fromTime))-\(timeString(entry.toTime))"
     }
 
-    func payoutString(_ entry: WorkDay) -> String { "\(settings.currencyCode) \(String(format: "%.2f", entry.totalPayout))" }
+    func payoutString(_ entry: WorkDay) -> String { String(format: "%.2f", entry.totalPayout) }
 
     func totalHoursInMonth() -> String {
         let totalMinutes = entries(for: .currentMonth).reduce(0) { $0 + $1.totalMinutes }
@@ -221,7 +221,7 @@ struct ReportsView: View {
 
     func totalPayoutInMonth() -> String {
         let total = entries(for: .currentMonth).reduce(0) { $0 + $1.totalPayout }
-        return "\(settings.currencyCode) \(String(format: "%.2f", total))"
+        return String(format: "%.2f", total)
     }
 
     func totalWorkDaysInMonth() -> String {

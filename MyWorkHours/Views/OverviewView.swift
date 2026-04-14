@@ -119,7 +119,7 @@ struct OverviewView: View {
             OverviewMetric(title: "Total Hours", value: durationString(totalSpanMinutes)),
             OverviewMetric(title: "Total Break Time", value: durationString(totalBreakMinutes)),
             OverviewMetric(title: "Total Work Hours", value: durationString(totalWorkMinutes)),
-            OverviewMetric(title: "Total Payout", value: "\(settings.currencyCode) \(String(format: "%.2f", totalPayout))")
+            OverviewMetric(title: "Total Payout", value: String(format: "%.2f", totalPayout))
         ]
     }
 

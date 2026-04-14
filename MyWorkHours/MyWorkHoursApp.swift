@@ -120,10 +120,6 @@ struct MyWorkHoursApp: App {
         autoBackupTimer?.invalidate()
         autoBackupTimer = nil
 
-        guard settings.autoBackupEnabled, settings.autoBackupFolderBookmark != nil else {
-            return
-        }
-
         let nextDate = AppDataStore.nextAutoBackupDate()
         let interval = max(nextDate.timeIntervalSinceNow, 1)
 
@@ -134,17 +130,8 @@ struct MyWorkHoursApp: App {
     }
 
     private func performAutoBackupIfNeeded() {
-        guard settings.autoBackupEnabled, let bookmarkData = settings.autoBackupFolderBookmark else {
-            return
-        }
-
         let now = Date()
         let scheduledBackupDate = AppDataStore.latestScheduledAutoBackupDate(before: now)
-
-        if let autoBackupConfiguredAt = settings.autoBackupConfiguredAt,
-           scheduledBackupDate < autoBackupConfiguredAt {
-            return
-        }
 
         if let lastAutoBackupAt = settings.lastAutoBackupAt,
            lastAutoBackupAt >= scheduledBackupDate {
@@ -152,7 +139,7 @@ struct MyWorkHoursApp: App {
         }
 
         do {
-            _ = try AppDataStore.autoBackup(snapshot: currentSnapshot, bookmarkData: bookmarkData)
+            _ = try AppDataStore.autoBackup(snapshot: currentSnapshot)
             settings.lastAutoBackupAt = scheduledBackupDate
         } catch {
             assertionFailure("Auto backup failed: \(error)")
