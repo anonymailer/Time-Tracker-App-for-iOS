@@ -106,7 +106,8 @@ struct DayEntrySheetView: View {
                             to: toTime,
                             hourlyRate: hourlyRate,
                             notes: notes,
-                            breakMinutes: (breakHours * 60) + breakMinutes
+                            breakMinutes: (breakHours * 60) + breakMinutes,
+                            templateID: selectedTemplateID
                         )
                         dismiss()
                     }

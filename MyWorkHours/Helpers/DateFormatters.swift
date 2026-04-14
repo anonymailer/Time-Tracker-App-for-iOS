@@ -55,3 +55,26 @@ struct BreakDurationFormatter {
         return (hourValue * 60) + minuteValue
     }
 }
+
+struct HourlyRateParser {
+    static func value(from input: String) -> Double {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return 0 }
+
+        let normalized = trimmed.replacingOccurrences(of: ",", with: ".")
+        if let directValue = Double(normalized) {
+            return directValue
+        }
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale.current
+
+        if let number = formatter.number(from: trimmed) {
+            return number.doubleValue
+        }
+
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.number(from: normalized)?.doubleValue ?? 0
+    }
+}

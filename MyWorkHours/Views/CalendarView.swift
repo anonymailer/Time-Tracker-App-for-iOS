@@ -152,7 +152,7 @@ private struct CalendarPickerView: View {
                     switch cell.kind {
                     case .empty:
                         Color.clear
-                            .frame(height: 52)
+                            .frame(height: 68)
                     case let .day(date):
                         Button {
                             select(date)
@@ -167,19 +167,29 @@ private struct CalendarPickerView: View {
                                     )
                                     .foregroundColor(dayTextColor(for: date))
 
-                                if let timingText = entryTimingText(for: date) {
-                                    Text(timingText)
-                                        .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(isSelected(date) ? .white.opacity(0.95) : .secondary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.55)
-                                        .frame(maxWidth: .infinity)
+                                if let timingTextLines = entryTimingTextLines(for: date) {
+                                    VStack(spacing: 1) {
+                                        ForEach(timingTextLines, id: \.self) { line in
+                                            Text(line)
+                                                .font(.system(size: 9, weight: .semibold))
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.7)
+                                        }
+                                    }
+                                    .foregroundColor(isSelected(date) ? .blue : .primary)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(isSelected(date) ? Color.white : Color(.systemGray6))
+                                    )
+                                    .frame(maxWidth: .infinity)
                                 } else {
                                     Color.clear
-                                        .frame(height: 10)
+                                        .frame(height: 22)
                                 }
                             }
-                            .frame(maxWidth: .infinity, minHeight: 56)
+                            .frame(maxWidth: .infinity, minHeight: 68)
                         }
                         .buttonStyle(.plain)
                     }
@@ -284,10 +294,10 @@ private struct CalendarPickerView: View {
         entries.first { configuredCalendar.isDate($0.date, inSameDayAs: date) }
     }
 
-    private func entryTimingText(for date: Date) -> String? {
+    private func entryTimingTextLines(for date: Date) -> [String]? {
         guard let entry = entry(for: date) else { return nil }
-        guard entry.hasWorkingTime else { return "Leave" }
-        return "\(timeString(entry.fromTime))-\(timeString(entry.toTime))"
+        guard entry.hasWorkingTime else { return ["Leave"] }
+        return [timeString(entry.fromTime), timeString(entry.toTime)]
     }
 
     private func dayNumberString(for date: Date) -> String {

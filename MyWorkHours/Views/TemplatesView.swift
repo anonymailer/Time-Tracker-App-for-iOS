@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TemplatesView: View {
     @EnvironmentObject var templatesVM: TemplatesViewModel
+    @EnvironmentObject var calendarVM: CalendarViewModel
     @EnvironmentObject var settings: SettingsViewModel
     @State private var showEditSheet = false
     @State private var editingTemplate: WorkTemplate? = nil
@@ -54,6 +55,7 @@ struct TemplatesView: View {
             .sheet(isPresented: $showEditSheet) {
                 TemplateEditView(template: $editingTemplate)
                     .environmentObject(templatesVM)
+                    .environmentObject(calendarVM)
             }
         }
     }

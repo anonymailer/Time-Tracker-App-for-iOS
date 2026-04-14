@@ -8,6 +8,7 @@ struct WorkDay: Identifiable, Codable {
     var breakMinutes: Int = 0
     var hourlyRate: Double
     var notes: String
+    var templateID: UUID? = nil
 
     var spanMinutes: Int {
         let diff = Calendar.current.dateComponents([.minute], from: fromTime, to: toTime)

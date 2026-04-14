@@ -14,6 +14,9 @@ struct SettingsView: View {
     @State private var backupFileName = AppDataStore.fileName()
     @State private var alertMessage = ""
     @State private var showingAlert = false
+    @State private var bulkHourlyRate = ""
+    @State private var showingBulkRateConfirmation = false
+    @FocusState private var isBulkHourlyRateFocused: Bool
 
     var body: some View {
         NavigationView {
@@ -80,6 +83,22 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+
+                Section(header: Text("Data Management")) {
+                    TextField("Update all existing entries hourly rate", text: $bulkHourlyRate)
+                        .keyboardType(.decimalPad)
+                        .focused($isBulkHourlyRateFocused)
+
+                    Button("Apply to Existing Entries") {
+                        isBulkHourlyRateFocused = false
+                        showingBulkRateConfirmation = true
+                    }
+                    .disabled(bulkHourlyRate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || calendarVM.entries.isEmpty)
+
+                    Text("This updates hourly rate for all existing saved entries only. Future entries and templates are not changed.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
             }
             .navigationTitle("Settings")
             .fileExporter(
@@ -111,11 +130,27 @@ struct SettingsView: View {
             } message: {
                 Text(alertMessage)
             }
+            .alert("Update Existing Entries?", isPresented: $showingBulkRateConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Apply") {
+                    applyBulkHourlyRate()
+                }
+            } message: {
+                Text("This will update the hourly rate for all existing saved entries.")
+            }
             .sheet(isPresented: $showingBackupFolderPicker) {
                 BackupFolderPicker(
                     onPick: saveBackupFolder,
                     onCancel: handleFolderPickerCancellation
                 )
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isBulkHourlyRateFocused = false
+                    }
+                }
             }
         }
     }
@@ -204,5 +239,12 @@ struct SettingsView: View {
     private func showAlert(message: String) {
         alertMessage = message
         showingAlert = true
+    }
+
+    private func applyBulkHourlyRate() {
+        let parsedRate = HourlyRateParser.value(from: bulkHourlyRate)
+        calendarVM.updateAllExistingEntriesHourlyRate(to: parsedRate)
+        bulkHourlyRate = String(format: "%.2f", parsedRate)
+        showAlert(message: "Updated hourly rate for all existing entries.")
     }
 }

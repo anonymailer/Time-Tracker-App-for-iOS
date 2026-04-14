@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TemplateEditView: View {
     @EnvironmentObject var templatesVM: TemplatesViewModel
+    @EnvironmentObject var calendarVM: CalendarViewModel
     @EnvironmentObject var settings: SettingsViewModel
     @Environment(\.dismiss) private var dismiss
     @Binding var template: WorkTemplate?
@@ -13,6 +14,9 @@ struct TemplateEditView: View {
     @State private var breakMinutes: Int = 0
     @State private var hourlyRate: String = ""
     @State private var notes: String = ""
+    @State private var pendingTemplateToApply: WorkTemplate?
+    @State private var previousTemplate: WorkTemplate?
+    @State private var showingApplyChangesPrompt = false
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -86,19 +90,26 @@ struct TemplateEditView: View {
                 Section {
                     Button("Save") {
                         focusedField = nil
+                        let existingTemplateID = template?.id
                         let newTemplate = WorkTemplate(
-                            id: template?.id ?? UUID(),
+                            id: existingTemplateID ?? UUID(),
                             name: name,
                             fromTime: fromTime,
                             toTime: toTime,
                             breakMinutes: (breakHours * 60) + breakMinutes,
-                            hourlyRate: Double(hourlyRate) ?? 0,
+                            hourlyRate: HourlyRateParser.value(from: hourlyRate),
                             notes: notes,
                             isDefault: template?.isDefault ?? false
                         )
                         templatesVM.saveTemplate(newTemplate)
-                        template = nil
-                        dismiss()
+
+                        if existingTemplateID != nil {
+                            pendingTemplateToApply = newTemplate
+                            showingApplyChangesPrompt = true
+                        } else {
+                            template = nil
+                            dismiss()
+                        }
                     }
                     .disabled(name.isEmpty || hourlyRate.isEmpty)
                 }
@@ -121,6 +132,24 @@ struct TemplateEditView: View {
             }
             .onAppear {
                 populateForm()
+            }
+            .alert("Update Existing Entries?", isPresented: $showingApplyChangesPrompt) {
+                Button("No", role: .cancel) {
+                    pendingTemplateToApply = nil
+                    template = nil
+                    dismiss()
+                }
+                Button("Yes") {
+                    if let pendingTemplateToApply {
+                        calendarVM.updateEntries(usingTemplate: pendingTemplateToApply, previousTemplate: previousTemplate)
+                    }
+                    self.pendingTemplateToApply = nil
+                    self.previousTemplate = nil
+                    template = nil
+                    dismiss()
+                }
+            } message: {
+                Text("Do you want to update all data entered with this template?")
             }
         }
     }
@@ -146,6 +175,7 @@ struct TemplateEditView: View {
         breakMinutes = components.minutes
         hourlyRate = String(format: "%.2f", template.hourlyRate)
         notes = template.notes
+        previousTemplate = template
     }
 
     private var timePickerLocale: Locale {
