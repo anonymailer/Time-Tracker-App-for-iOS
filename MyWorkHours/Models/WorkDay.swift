@@ -32,17 +32,15 @@ struct WorkDay: Identifiable, Codable {
     }
 
     var fromTimeString: String {
-        DateFormatterHelper.time.string(from: fromTime)
+        DateFormatterHelper.string(from: fromTime)
     }
 
     var toTimeString: String {
-        DateFormatterHelper.time.string(from: displayedToTime)
+        DateFormatterHelper.string(from: displayedToTime)
     }
 
     var hourlyRateString: String { String(format: "%.2f", hourlyRate) }
     var totalHoursString: String {
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-        return String(format: "%02d:%02d", hours, minutes)
+        WorkDurationFormatter.displayString(for: totalMinutes)
     }
 }

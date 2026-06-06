@@ -123,6 +123,29 @@ struct DayEntrySheetView: View {
                             .focused($focusedField, equals: .notes)
                     }
 
+                    Section(header: Text("Summary")) {
+                        HStack {
+                            Text("Work Hours")
+                            Spacer()
+                            Text(durationString(editedTotalMinutes))
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text("Expected")
+                            Spacer()
+                            Text(durationString(settings.expectedDailyMinutes))
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text(dailyDeltaMinutes >= 0 ? "Overtime" : "Shortfall")
+                            Spacer()
+                            Text(WorkDurationFormatter.signedDisplayString(for: dailyDeltaMinutes))
+                                .foregroundColor(dailyDeltaMinutes >= 0 ? .green : .orange)
+                        }
+                    }
+
                     Section {
                         HStack {
                             Spacer()
@@ -210,6 +233,16 @@ struct DayEntrySheetView: View {
         }
     }
 
+    private var editedTotalMinutes: Int {
+        let spanMinutes = Calendar.current.dateComponents([.minute], from: fromTime, to: toTime).minute ?? 0
+        let totalBreakMinutes = (breakHours * 60) + breakMinutes
+        return max(spanMinutes - totalBreakMinutes, 0)
+    }
+
+    private var dailyDeltaMinutes: Int {
+        editedTotalMinutes - settings.expectedDailyMinutes
+    }
+
     private var hasExistingEntries: Bool {
         dates.contains { date in
             calendarVM.entry(for: date) != nil
@@ -241,7 +274,11 @@ struct DayEntrySheetView: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        DateFormatterHelper.timeFormatter(for: settings.timeFormat).string(from: date)
+        DateFormatterHelper.string(from: date, format: settings.timeFormat)
+    }
+
+    private func durationString(_ minutes: Int) -> String {
+        WorkDurationFormatter.displayString(for: minutes)
     }
 
     private var timePickerLocale: Locale {

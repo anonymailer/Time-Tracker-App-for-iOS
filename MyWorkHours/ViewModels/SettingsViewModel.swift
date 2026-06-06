@@ -92,6 +92,16 @@ class SettingsViewModel: ObservableObject {
             onChange?()
         }
     }
+    @Published var expectedDailyMinutes: Int = 8 * 60 {
+        didSet {
+            onChange?()
+        }
+    }
+    @Published var expectedWeeklyMinutes: Int = 40 * 60 {
+        didSet {
+            onChange?()
+        }
+    }
 
     init(state: SettingsState = .init()) {
         let resolvedInstallationDate = state.installationDate ?? Date()
@@ -107,6 +117,8 @@ class SettingsViewModel: ObservableObject {
         autoBackupConfiguredAt = state.autoBackupConfiguredAt
         installationDate = resolvedInstallationDate
         installationBuildIdentifier = state.installationBuildIdentifier
+        expectedDailyMinutes = state.expectedDailyMinutes
+        expectedWeeklyMinutes = state.expectedWeeklyMinutes
         DateFormatterHelper.currentTimeFormat = timeFormat
     }
 
@@ -124,6 +136,8 @@ class SettingsViewModel: ObservableObject {
         autoBackupConfiguredAt = state.autoBackupConfiguredAt
         installationDate = resolvedInstallationDate
         installationBuildIdentifier = state.installationBuildIdentifier
+        expectedDailyMinutes = state.expectedDailyMinutes
+        expectedWeeklyMinutes = state.expectedWeeklyMinutes
     }
 
     var state: SettingsState {
@@ -140,6 +154,8 @@ class SettingsViewModel: ObservableObject {
         state.autoBackupConfiguredAt = autoBackupConfiguredAt
         state.installationDate = installationDate
         state.installationBuildIdentifier = installationBuildIdentifier
+        state.expectedDailyMinutes = expectedDailyMinutes
+        state.expectedWeeklyMinutes = expectedWeeklyMinutes
         return state
     }
 
@@ -162,6 +178,8 @@ struct SettingsState: Codable {
     var autoBackupConfiguredAt: Date? = nil
     var installationDate: Date? = nil
     var installationBuildIdentifier: String? = nil
+    var expectedDailyMinutes: Int = 8 * 60
+    var expectedWeeklyMinutes: Int = 40 * 60
 
     private enum CodingKeys: String, CodingKey {
         case appTheme
@@ -176,6 +194,8 @@ struct SettingsState: Codable {
         case autoBackupConfiguredAt
         case installationDate
         case installationBuildIdentifier
+        case expectedDailyMinutes
+        case expectedWeeklyMinutes
     }
 
     init() { }
@@ -194,5 +214,7 @@ struct SettingsState: Codable {
         autoBackupConfiguredAt = try container.decodeIfPresent(Date.self, forKey: .autoBackupConfiguredAt)
         installationDate = try container.decodeIfPresent(Date.self, forKey: .installationDate)
         installationBuildIdentifier = try container.decodeIfPresent(String.self, forKey: .installationBuildIdentifier)
+        expectedDailyMinutes = try container.decodeIfPresent(Int.self, forKey: .expectedDailyMinutes) ?? 8 * 60
+        expectedWeeklyMinutes = try container.decodeIfPresent(Int.self, forKey: .expectedWeeklyMinutes) ?? 40 * 60
     }
 }

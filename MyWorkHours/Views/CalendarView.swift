@@ -20,7 +20,8 @@ struct CalendarView: View {
                         isSelectingMultipleDates: $isSelectingMultipleDates,
                         entries: calendarVM.entries,
                         timeFormat: settings.timeFormat,
-                        weekStartDay: settings.weekStartDay
+                        weekStartDay: settings.weekStartDay,
+                        expectedDailyMinutes: settings.expectedDailyMinutes
                     )
                     .frame(height: 470)
                     .padding(.horizontal)
@@ -75,6 +76,9 @@ struct CalendarView: View {
                     Text("From: \(timeString(entry.fromTime))")
                     Text("To: \(timeString(entry.displayedToTime))")
                     Text("Work Hours: \(entry.totalHoursString)")
+                    Text("Expected: \(durationString(settings.expectedDailyMinutes))")
+                    Text("Overtime: \(WorkDurationFormatter.signedDisplayString(for: dailyDeltaMinutes(entry)))")
+                        .foregroundColor(dailyDeltaMinutes(entry) >= 0 ? .green : .orange)
                     Text("Payout: \(String(format: "%.2f", entry.totalPayout))")
                     Text("Notes: \(entry.notes)")
                 }
@@ -115,7 +119,15 @@ struct CalendarView: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        DateFormatterHelper.timeFormatter(for: settings.timeFormat).string(from: date)
+        DateFormatterHelper.string(from: date, format: settings.timeFormat)
+    }
+
+    private func durationString(_ minutes: Int) -> String {
+        WorkDurationFormatter.displayString(for: minutes)
+    }
+
+    private func dailyDeltaMinutes(_ entry: WorkDay) -> Int {
+        entry.totalMinutes - settings.expectedDailyMinutes
     }
 }
 
@@ -127,6 +139,7 @@ private struct CalendarPickerView: View {
     let entries: [WorkDay]
     let timeFormat: TimeFormat
     let weekStartDay: WeekStartDay
+    let expectedDailyMinutes: Int
     @State private var displayedMonth: Date = Date()
 
     private var configuredCalendar: Calendar {
@@ -176,12 +189,12 @@ private struct CalendarPickerView: View {
                                                 .minimumScaleFactor(0.7)
                                         }
                                     }
-                                    .foregroundColor(isSelected(date) ? .blue : .primary)
+                                    .foregroundColor(isSelected(date) ? .blue : entryTimingForegroundColor(for: date))
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 3)
                                     .background(
                                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                            .fill(isSelected(date) ? Color.white : Color(.systemGray6))
+                                            .fill(entryTimingBackgroundColor(for: date, isSelected: isSelected(date)))
                                     )
                                     .frame(maxWidth: .infinity)
                                 } else {
@@ -300,6 +313,17 @@ private struct CalendarPickerView: View {
         return [timeString(entry.fromTime), timeString(entry.toTime)]
     }
 
+    private func entryTimingForegroundColor(for date: Date) -> Color {
+        guard let entry = entry(for: date), entry.hasWorkingTime else { return .primary }
+        return entry.totalMinutes >= expectedDailyMinutes ? .orange : .primary
+    }
+
+    private func entryTimingBackgroundColor(for date: Date, isSelected: Bool) -> Color {
+        guard !isSelected else { return .white }
+        guard let entry = entry(for: date), entry.hasWorkingTime else { return Color(.systemGray6) }
+        return entry.totalMinutes >= expectedDailyMinutes ? Color.orange.opacity(0.16) : Color(.systemGray6)
+    }
+
     private func dayNumberString(for date: Date) -> String {
         String(configuredCalendar.component(.day, from: date))
     }
@@ -324,16 +348,7 @@ private struct CalendarPickerView: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        let components = configuredCalendar.dateComponents([.hour, .minute], from: date)
-        let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
-
-        switch timeFormat {
-        case .hour24:
-            return String(format: "%02d:%02d", hour, minute)
-        case .hour12:
-            return DateFormatterHelper.timeFormatter(for: .hour12).string(from: date)
-        }
+        DateFormatterHelper.string(from: date, format: timeFormat)
     }
 }
 

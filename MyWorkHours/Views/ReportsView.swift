@@ -31,6 +31,9 @@ struct ReportsView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
 
+                monthlySummaryGrid
+                    .padding(.horizontal)
+
                 // Month navigation
                 HStack {
                     Button(action: { previousMonth() }) { Image(systemName: "chevron.left") }
@@ -132,6 +135,30 @@ struct ReportsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var monthlySummaryGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            reportSummaryCard(title: "Worked", value: totalHoursInMonth())
+            reportSummaryCard(title: "Expected", value: durationString(expectedMinutesInMonth))
+            reportSummaryCard(title: "Month Target", value: durationString(expectedMinutesThroughMonthEnd))
+            reportSummaryCard(title: "Overtime", value: WorkDurationFormatter.signedDisplayString(for: overtimeMinutesInMonth))
+            reportSummaryCard(title: "Shortfall", value: durationString(shortfallMinutesInMonth))
+        }
+    }
+
+    private func reportSummaryCard(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.headline)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
     // MARK: Helpers
     var daysInMonth: [Date] {
         guard let monthInterval = calendar.dateInterval(of: .month, for: currentMonth) else { return [] }
@@ -176,6 +203,51 @@ struct ReportsView: View {
         columnWidth(header: "Notes", values: reportRows.map { $0.entry?.notes ?? "" }, minimum: 140)
     }
 
+    private var entriesInCurrentMonth: [WorkDay] {
+        entries(for: .currentMonth)
+    }
+
+    private var expectedMinutesInMonth: Int {
+        settings.expectedDailyMinutes * expectedWeekdayCount(from: monthStart, to: expectedMonthEnd)
+    }
+
+    private var expectedMinutesThroughMonthEnd: Int {
+        settings.expectedDailyMinutes * expectedWeekdayCount(from: monthStart, to: monthEnd)
+    }
+
+    private var monthStart: Date {
+        calendar.dateInterval(of: .month, for: currentMonth)?.start ?? currentMonth
+    }
+
+    private var monthEnd: Date {
+        guard let interval = calendar.dateInterval(of: .month, for: currentMonth) else { return currentMonth }
+        return calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.start
+    }
+
+    private var expectedMonthEnd: Date {
+        let today = calendar.startOfDay(for: Date())
+        let start = calendar.startOfDay(for: monthStart)
+        let end = calendar.startOfDay(for: monthEnd)
+
+        if start <= today && today <= end {
+            return today
+        }
+
+        return monthEnd
+    }
+
+    private var overtimeMinutesInMonth: Int {
+        entriesInCurrentMonth.reduce(0) { total, entry in
+            guard entry.hasWorkingTime else { return total }
+            return total + max(entry.totalMinutes - settings.expectedDailyMinutes, 0)
+        }
+    }
+
+    private var shortfallMinutesInMonth: Int {
+        let totalMinutes = entriesInCurrentMonth.reduce(0) { $0 + $1.totalMinutes }
+        return max(expectedMinutesInMonth - totalMinutes, 0)
+    }
+
     func previousMonth() { currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth }
     func nextMonth() { currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth }
 
@@ -190,17 +262,7 @@ struct ReportsView: View {
     }
 
     func timeString(_ date: Date) -> String {
-        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-        let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
-
-        switch settings.timeFormat {
-        case .hour24:
-            return String(format: "%02d:%02d", hour, minute)
-        case .hour12:
-            let formatter = DateFormatterHelper.timeFormatter(for: .hour12)
-            return formatter.string(from: date)
-        }
+        DateFormatterHelper.string(from: date, format: settings.timeFormat)
     }
 
     func totalHoursString(_ entry: WorkDay) -> String { entry.totalHoursString }
@@ -213,19 +275,34 @@ struct ReportsView: View {
     func payoutString(_ entry: WorkDay) -> String { String(format: "%.2f", entry.totalPayout) }
 
     func totalHoursInMonth() -> String {
-        let totalMinutes = entries(for: .currentMonth).reduce(0) { $0 + $1.totalMinutes }
-        let hours = totalMinutes / 60
-        let mins = totalMinutes % 60
-        return String(format: "%02d:%02d", hours, mins)
+        let totalMinutes = entriesInCurrentMonth.reduce(0) { $0 + $1.totalMinutes }
+        return durationString(totalMinutes)
     }
 
     func totalPayoutInMonth() -> String {
-        let total = entries(for: .currentMonth).reduce(0) { $0 + $1.totalPayout }
+        let total = entriesInCurrentMonth.reduce(0) { $0 + $1.totalPayout }
         return String(format: "%.2f", total)
     }
 
     func totalWorkDaysInMonth() -> String {
-        "Work Days : \(entries(for: .currentMonth).filter(\.hasWorkingTime).count)"
+        "Work Days : \(entriesInCurrentMonth.filter(\.hasWorkingTime).count)"
+    }
+
+    func durationString(_ minutes: Int) -> String {
+        WorkDurationFormatter.displayString(for: minutes)
+    }
+
+    func expectedWeekdayCount(from startDate: Date, to endDate: Date) -> Int {
+        let start = calendar.startOfDay(for: min(startDate, endDate))
+        let end = calendar.startOfDay(for: max(startDate, endDate))
+        let dayCount = (calendar.dateComponents([.day], from: start, to: end).day ?? 0) + 1
+
+        guard dayCount > 0 else { return 0 }
+
+        return (0..<dayCount).reduce(0) { count, offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { return count }
+            return calendar.isDateInWeekend(date) ? count : count + 1
+        }
     }
 
     func columnWidth(header: String, values: [String], minimum: CGFloat = 0, alignment: NSTextAlignment = .left) -> CGFloat {

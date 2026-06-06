@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BE11C8D62F9382790086551D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BE11C8D52F9382790086551D /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		203F9A4F2F746CDE00A07A84 /* MyWorkHours.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyWorkHours.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE11C8D52F9382790086551D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +39,7 @@
 			children = (
 				203F9A512F746CDE00A07A84 /* MyWorkHours */,
 				203F9A502F746CDE00A07A84 /* Products */,
+				BE11C8D52F9382790086551D /* Assets.xcassets */,
 			);
 			sourceTree = "<group>";
 		};
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE11C8D62F9382790086551D /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

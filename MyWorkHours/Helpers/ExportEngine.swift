@@ -319,7 +319,7 @@ class ExportEngine {
             return DateFormatterHelper.dayFull.string(from: entry.date)
         case .timings:
             guard entry.hasWorkingTime else { return "No Working" }
-            return "\(timeString(entry.fromTime, format: exportTimeFormat))-\(timeString(entry.toTime, format: exportTimeFormat))"
+            return "\(DateFormatterHelper.string(from: entry.fromTime, format: exportTimeFormat))-\(DateFormatterHelper.string(from: entry.toTime, format: exportTimeFormat))"
         case .hours:
             return entry.totalHoursString
         case .payout:
@@ -357,7 +357,7 @@ class ExportEngine {
 
     private static func monthlyTotals(entries: [WorkDay], settings: SettingsViewModel) -> (workDays: String, hours: String, payoutDisplay: String, payoutValue: String) {
         let totalMinutes = entries.reduce(0) { $0 + $1.totalMinutes }
-        let totalHours = String(format: "%02d:%02d", totalMinutes / 60, totalMinutes % 60)
+        let totalHours = WorkDurationFormatter.displayString(for: totalMinutes)
         let totalPayout = entries.reduce(0) { $0 + $1.totalPayout }
         let payoutValue = String(format: "%.2f", totalPayout)
         let workDays = entries.filter(\.hasWorkingTime).count
@@ -371,19 +371,6 @@ class ExportEngine {
         case .hours: return 60
         case .payout: return 80
         case .notes: return 140
-        }
-    }
-
-    private static func timeString(_ date: Date, format: TimeFormat) -> String {
-        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-        let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
-
-        switch format {
-        case .hour24:
-            return String(format: "%02d:%02d", hour, minute)
-        case .hour12:
-            return DateFormatterHelper.timeFormatter(for: .hour12).string(from: date)
         }
     }
 

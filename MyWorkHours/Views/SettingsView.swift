@@ -28,6 +28,30 @@ struct SettingsView: View {
                     .pickerStyle(SegmentedPickerStyle())
                 }
 
+                Section(header: Text("Work Rules")) {
+                    Stepper(value: $settings.expectedDailyMinutes, in: 15...24 * 60, step: 15) {
+                        HStack {
+                            Text("Expected Daily Hours")
+                            Spacer()
+                            Text(durationString(settings.expectedDailyMinutes))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Stepper(value: $settings.expectedWeeklyMinutes, in: 60...7 * 24 * 60, step: 60) {
+                        HStack {
+                            Text("Expected Weekly Hours")
+                            Spacer()
+                            Text(durationString(settings.expectedWeeklyMinutes))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Text("These values are used for overview, reports, calendar overtime labels, and day-entry feedback.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+
                 Section(header: Text("Backup & Restore")) {
                     Text("Automatic backup runs every day at 10:00 PM and saves inside the app backup folder.")
                         .font(.footnote)
@@ -152,6 +176,10 @@ struct SettingsView: View {
     private func showAlert(message: String) {
         alertMessage = message
         showingAlert = true
+    }
+
+    private func durationString(_ minutes: Int) -> String {
+        WorkDurationFormatter.displayString(for: minutes)
     }
 
     private func applyBulkHourlyRate() {

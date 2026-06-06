@@ -9,11 +9,18 @@ struct DateFormatterHelper {
         return formatter
     }()
 
+    // Cache formatters to avoid expensive re-creation
+    private static var formatterCache: [TimeFormat: DateFormatter] = [:]
+
     static var time: DateFormatter {
-        timeFormatter(for: currentTimeFormat)
+        return getFormatter(for: currentTimeFormat)
     }
 
-    static func timeFormatter(for format: TimeFormat) -> DateFormatter {
+    static func getFormatter(for format: TimeFormat) -> DateFormatter {
+        if let cached = formatterCache[format] {
+            return cached
+        }
+        
         let formatter = DateFormatter()
         switch format {
         case .hour12:
@@ -21,13 +28,32 @@ struct DateFormatterHelper {
         case .hour24:
             formatter.dateFormat = "HH:mm"
         }
+        formatterCache[format] = formatter
         return formatter
+    }
+
+    // Centralized method to use across the app
+    static func string(from date: Date, format: TimeFormat? = nil) -> String {
+        let targetFormat = format ?? currentTimeFormat
+        return getFormatter(for: targetFormat).string(from: date)
+    }
+}
+
+struct WorkDurationFormatter {
+    static func displayString(for minutes: Int) -> String {
+        let safeMinutes = max(minutes, 0)
+        return String(format: "%02d:%02d", safeMinutes / 60, safeMinutes % 60)
+    }
+
+    static func signedDisplayString(for minutes: Int) -> String {
+        let prefix = minutes >= 0 ? "+" : "-"
+        return prefix + displayString(for: abs(minutes))
     }
 }
 
 struct BreakDurationFormatter {
     static func displayString(for minutes: Int) -> String {
-        String(format: "%02d:%02d", minutes / 60, minutes % 60)
+        WorkDurationFormatter.displayString(for: minutes)
     }
 
     static func components(for minutes: Int) -> (hours: Int, minutes: Int) {

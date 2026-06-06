@@ -66,6 +66,6 @@ struct TemplatesView: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        DateFormatterHelper.timeFormatter(for: settings.timeFormat).string(from: date)
+        DateFormatterHelper.string(from: date, format: settings.timeFormat)
     }
 }

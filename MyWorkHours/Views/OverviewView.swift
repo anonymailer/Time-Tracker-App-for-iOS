@@ -90,10 +90,6 @@ struct OverviewView: View {
         filteredEntries.filter { !$0.hasWorkingTime }.count
     }
 
-    private var totalNonWorkingDays: Int {
-        max(totalDays - totalWorkDays, 0)
-    }
-
     private var totalSpanMinutes: Int {
         filteredEntries.reduce(0) { $0 + max($1.spanMinutes, 0) }
     }
@@ -110,16 +106,67 @@ struct OverviewView: View {
         filteredEntries.reduce(0) { $0 + $1.totalPayout }
     }
 
-    private var metrics: [OverviewMetric] {
+    private var expectedWorkMinutes: Int {
+        settings.expectedDailyMinutes * expectedWeekdayCount(from: rangeStart, to: expectedRangeEnd)
+    }
+
+    private var expectedRangeEnd: Date {
+        let today = calendar.startOfDay(for: Date())
+        let start = calendar.startOfDay(for: rangeStart)
+        let end = calendar.startOfDay(for: rangeEnd)
+
+        if start <= today && today <= end {
+            return today
+        }
+
+        return rangeEnd
+    }
+
+    private var expectedMonthlyMinutes: Int {
+        settings.expectedDailyMinutes * expectedWeekdayCount(from: rangeStart, to: rangeEnd)
+    }
+
+    private var expectedWorkDays: Int {
+        expectedWeekdayCount(from: rangeStart, to: expectedRangeEnd)
+    }
+
+    private var totalOvertimeMinutes: Int {
+        max(totalWorkMinutes - expectedWorkMinutes, 0)
+    }
+
+    private var shortfallMinutes: Int {
+        max(expectedWorkMinutes - totalWorkMinutes, 0)
+    }
+
+    private var averageWorkMinutes: Int {
+        guard totalWorkDays > 0 else { return 0 }
+        return totalWorkMinutes / totalWorkDays
+    }
+
+    private var summaryMetrics: [OverviewMetric] {
+        var metrics = [
+            OverviewMetric(title: "Worked", value: durationString(totalWorkMinutes)),
+            OverviewMetric(title: "Expected", value: durationString(expectedWorkMinutes)),
+            OverviewMetric(title: "Total Overtime", value: signedDurationString(totalOvertimeMinutes)),
+            OverviewMetric(title: "Shortfall", value: durationString(shortfallMinutes)),
+            OverviewMetric(title: "Avg Day", value: durationString(averageWorkMinutes))
+        ]
+
+        if period == .monthly {
+            metrics.insert(OverviewMetric(title: "Month Target", value: durationString(expectedMonthlyMinutes)), at: 2)
+        }
+
+        return metrics
+    }
+
+    private var detailMetrics: [OverviewMetric] {
         [
-            OverviewMetric(title: "Total Days", value: "\(totalDays)"),
-            OverviewMetric(title: "Total Work Days", value: "\(totalWorkDays)"),
-            OverviewMetric(title: "Total Non Working Days", value: "\(totalNonWorkingDays)"),
-            OverviewMetric(title: "Total Leaves", value: "\(totalLeaves)"),
-            OverviewMetric(title: "Total Hours", value: durationString(totalSpanMinutes)),
-            OverviewMetric(title: "Total Break Time", value: durationString(totalBreakMinutes)),
-            OverviewMetric(title: "Total Work Hours", value: durationString(totalWorkMinutes)),
-            OverviewMetric(title: "Total Payout", value: String(format: "%.2f", totalPayout))
+            OverviewMetric(title: "Work Days", value: "\(totalWorkDays)"),
+            OverviewMetric(title: "Expected Days", value: "\(expectedWorkDays)"),
+            OverviewMetric(title: "Leaves", value: "\(totalLeaves)"),
+            OverviewMetric(title: "Break Time", value: durationString(totalBreakMinutes)),
+            OverviewMetric(title: "Span Hours", value: durationString(totalSpanMinutes)),
+            OverviewMetric(title: "Payout", value: String(format: "%.2f", totalPayout))
         ]
     }
 
@@ -137,58 +184,29 @@ struct OverviewView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Period")
+                VStack(alignment: .leading, spacing: 12) {
+                    periodControls
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(periodDescription)
                             .font(.headline)
+                        Text("Expected hours use Monday-Friday weekdays.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
 
-                        Picker("Period", selection: $period) {
-                            ForEach(OverviewPeriod.allCases) { option in
-                                Text(option.rawValue).tag(option)
+                    summaryPanel
+
+                    DisclosureGroup("Details") {
+                        VStack(spacing: 0) {
+                            ForEach(detailMetrics) { metric in
+                                detailRow(title: metric.title, value: metric.value)
                             }
                         }
-                        .pickerStyle(.segmented)
-
-                        switch period {
-                        case .monthly:
-                            VStack(alignment: .leading, spacing: 12) {
-                                Picker("Year", selection: $selectedYear) {
-                                    ForEach(years, id: \.self) { year in
-                                        Text(String(year)).tag(year)
-                                    }
-                                }
-
-                                Picker("Month", selection: $selectedMonth) {
-                                    ForEach(Array(monthSymbols.enumerated()), id: \.offset) { index, month in
-                                        Text(month).tag(index + 1)
-                                    }
-                                }
-                            }
-                        case .yearly:
-                            Picker("Year", selection: $selectedYear) {
-                                ForEach(years, id: \.self) { year in
-                                    Text(String(year)).tag(year)
-                                }
-                            }
-                        case .custom:
-                            VStack(alignment: .leading, spacing: 12) {
-                                DatePicker("Start Date", selection: $customStartDate, displayedComponents: .date)
-                                DatePicker("End Date", selection: $customEndDate, displayedComponents: .date)
-                            }
-                        }
+                        .padding(.top, 8)
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                    Text(periodDescription)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(metrics) { metric in
-                            overviewCard(title: metric.title, value: metric.value)
-                        }
-                    }
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .padding()
             }
@@ -201,23 +219,145 @@ struct OverviewView: View {
         }
     }
 
-    private func overviewCard(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var periodControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Period", selection: $period) {
+                ForEach(OverviewPeriod.allCases) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            switch period {
+            case .monthly:
+                HStack(spacing: 12) {
+                    Picker("Month", selection: $selectedMonth) {
+                        ForEach(Array(monthSymbols.enumerated()), id: \.offset) { index, month in
+                            Text(month).tag(index + 1)
+                        }
+                    }
+
+                    Picker("Year", selection: $selectedYear) {
+                        ForEach(years, id: \.self) { year in
+                            Text(String(year)).tag(year)
+                        }
+                    }
+                }
+            case .yearly:
+                Picker("Year", selection: $selectedYear) {
+                    ForEach(years, id: \.self) { year in
+                        Text(String(year)).tag(year)
+                    }
+                }
+            case .custom:
+                VStack(spacing: 8) {
+                    DatePicker("Start", selection: $customStartDate, displayedComponents: .date)
+                    DatePicker("End", selection: $customEndDate, displayedComponents: .date)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var summaryPanel: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(totalWorkDays) days worked")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("Worked")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(durationString(totalWorkMinutes))
+                        .font(.system(.title, design: .rounded).weight(.semibold))
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(expectedWorkDays) days expected")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("Expected")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(durationString(expectedWorkMinutes))
+                        .font(.title3.weight(.semibold))
+                        .minimumScaleFactor(0.8)
+                }
+            }
+
+            ProgressView(value: progressValue)
+                .tint(progressTint)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(summaryMetrics.dropFirst(2)) { metric in
+                    compactMetric(title: metric.title, value: metric.value)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var progressValue: Double {
+        guard expectedWorkMinutes > 0 else { return 0 }
+        return min(Double(totalWorkMinutes) / Double(expectedWorkMinutes), 1)
+    }
+
+    private var progressTint: Color {
+        totalWorkMinutes >= expectedWorkMinutes ? .green : .blue
+    }
+
+    private func compactMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.secondary)
             Text(value)
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
                 .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-        .padding()
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func detailRow(title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .fontWeight(.medium)
+        }
+        .font(.subheadline)
+        .padding(.vertical, 7)
+    }
+
+    private func expectedWeekdayCount(from startDate: Date, to endDate: Date) -> Int {
+        let start = calendar.startOfDay(for: min(startDate, endDate))
+        let end = calendar.startOfDay(for: max(startDate, endDate))
+        let dayCount = (calendar.dateComponents([.day], from: start, to: end).day ?? 0) + 1
+
+        guard dayCount > 0 else { return 0 }
+
+        return (0..<dayCount).reduce(0) { count, offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { return count }
+            return calendar.isDateInWeekend(date) ? count : count + 1
+        }
     }
 
     private func durationString(_ totalMinutes: Int) -> String {
-        let safeMinutes = max(totalMinutes, 0)
-        return String(format: "%02d:%02d", safeMinutes / 60, safeMinutes % 60)
+        WorkDurationFormatter.displayString(for: totalMinutes)
+    }
+
+    private func signedDurationString(_ totalMinutes: Int) -> String {
+        WorkDurationFormatter.signedDisplayString(for: totalMinutes)
     }
 
     private func dateString(_ date: Date) -> String {
