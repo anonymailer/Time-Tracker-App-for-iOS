@@ -1,4 +1,4 @@
-My Work Hours
+My Work Hours App for IOS
 
 Track your working hours. Calculate your earnings. Stay organised.
 
