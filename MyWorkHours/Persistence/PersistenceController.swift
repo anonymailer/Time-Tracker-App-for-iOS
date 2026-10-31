@@ -62,8 +62,9 @@ enum AppDataStore {
         do {
             return try decoder.decode(AppDataSnapshot.self, from: data)
         } catch {
+            print("DECODE ERROR:", error)
             return .empty
-        }
+            }
     }
 
     static func save(_ snapshot: AppDataSnapshot) {
